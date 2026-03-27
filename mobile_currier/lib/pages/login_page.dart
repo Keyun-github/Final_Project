@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class LoginPage extends StatefulWidget {
   final Function(String) onLogin;
@@ -19,11 +21,7 @@ class _LoginPageState extends State<LoginPage>
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
-  // Demo driver credentials
-  final Map<String, Map<String, String>> _drivers = {
-    'driver1': {'password': 'driver1', 'name': 'Ahmad Kurniawan'},
-    'driver2': {'password': 'driver2', 'name': 'Bambang Suryadi'},
-  };
+  static const String _baseUrl = 'http://localhost:3000';
 
   @override
   void initState() {
@@ -58,15 +56,31 @@ class _LoginPageState extends State<LoginPage>
       _error = null;
     });
 
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/drivers/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'username': user, 'password': pass}),
+          )
+          .timeout(const Duration(seconds: 10));
 
-    if (_drivers.containsKey(user) && _drivers[user]!['password'] == pass) {
-      widget.onLogin(_drivers[user]!['name']!);
-    } else {
-      setState(() {
-        _loading = false;
-        _error = 'Username atau password salah';
-      });
+      if (response.statusCode == 201) {
+        final data = json.decode(response.body);
+        widget.onLogin(data['name']);
+      } else {
+        final errorData = json.decode(response.body);
+        setState(() => _error = errorData['message'] ?? 'Login gagal');
+      }
+    } catch (e) {
+      setState(
+        () => _error =
+            'Tidak dapat terhubung ke server. Pastikan backend berjalan.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -279,15 +293,6 @@ class _LoginPageState extends State<LoginPage>
                       ),
                     ),
                     const SizedBox(height: 32),
-
-                    // Help text
-                    Text(
-                      'driver1 / driver1  •  driver2 / driver2',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.5),
-                      ),
-                    ),
                   ],
                 ),
               ),

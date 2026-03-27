@@ -20,6 +20,8 @@
     let newPrice = $state("");
     let newStock = $state("");
     let newUnit = $state("KG");
+    let newImage = $state<File | null>(null);
+    let newImagePreview = $state("");
     let formError = $state("");
 
     const unitOptions = ["KG", "Box", "Sack - 25kg", "Sack - 50kg", "Piece"];
@@ -69,12 +71,23 @@
         newPrice = "";
         newStock = "";
         newUnit = "KG";
+        newImage = null;
+        newImagePreview = "";
         formError = "";
         showModal = true;
     }
 
     function closeModal() {
         showModal = false;
+    }
+
+    function handleImageChange(e: Event) {
+        const input = e.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (file) {
+            newImage = file;
+            newImagePreview = URL.createObjectURL(file);
+        }
     }
 
     async function addItem() {
@@ -101,6 +114,7 @@
                 price: Number(priceVal),
                 stock: Number(stockVal),
                 unit: newUnit,
+                image: newImage,
             });
             await loadProducts();
             closeModal();
@@ -305,6 +319,32 @@
                         placeholder="e.g. Beras Premium"
                         bind:value={newName}
                     />
+                </div>
+                <div class="form-group">
+                    <label for="item-image">Product Image</label>
+                    <div class="image-upload-container">
+                        <input
+                            id="item-image"
+                            type="file"
+                            accept="image/*"
+                            onchange={handleImageChange}
+                            class="image-input"
+                        />
+                        {#if newImagePreview}
+                            <div class="image-preview">
+                                <img src={newImagePreview} alt="Preview" />
+                            </div>
+                        {:else}
+                            <div class="image-placeholder">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <polyline points="21 15 16 10 5 21"/>
+                                </svg>
+                                <span>Click to upload image</span>
+                            </div>
+                        {/if}
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="item-price">Price (Rp)</label>
@@ -681,6 +721,57 @@
     .form-group select:focus {
         border-color: var(--color-border-focus);
         box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+    }
+
+    .image-upload-container {
+        position: relative;
+        border: 2px dashed var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 24px;
+        text-align: center;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        background: var(--color-bg-input);
+    }
+
+    .image-upload-container:hover {
+        border-color: var(--color-primary);
+        background: rgba(108, 99, 255, 0.03);
+    }
+
+    .image-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .image-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: var(--color-text-faint);
+    }
+
+    .image-placeholder span {
+        font-size: 0.85rem;
+    }
+
+    .image-preview {
+        max-width: 200px;
+        max-height: 150px;
+        margin: 0 auto;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+    }
+
+    .image-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
 
     .form-error {

@@ -1,63 +1,31 @@
 <script lang="ts">
-    // ---- Employee Management ----
-    interface Employee {
-        id: number;
-        name: string;
-        telp: string;
-        username: string;
-        password: string;
-        active: boolean;
-    }
+    import { onMount } from "svelte";
+    import { fetchEmployees, createEmployee, deleteEmployee, toggleEmployeeActive, type Employee } from "$lib/api";
 
-    let employees = $state<Employee[]>([
-        {
-            id: 1,
-            name: "Budi Santoso",
-            telp: "081234567890",
-            username: "budi",
-            password: "budi123",
-            active: true,
-        },
-        {
-            id: 2,
-            name: "Siti Nurhaliza",
-            telp: "082345678901",
-            username: "siti",
-            password: "siti123",
-            active: true,
-        },
-        {
-            id: 3,
-            name: "Ahmad Wijaya",
-            telp: "083456789012",
-            username: "ahmad",
-            password: "ahmad123",
-            active: false,
-        },
-        {
-            id: 4,
-            name: "Dewi Lestari",
-            telp: "084567890123",
-            username: "dewi",
-            password: "dewi123",
-            active: true,
-        },
-        {
-            id: 5,
-            name: "Rizky Pratama",
-            telp: "085678901234",
-            username: "rizky",
-            password: "rizky123",
-            active: true,
-        },
-    ]);
-
+    let employees = $state<Employee[]>([]);
+    let isLoading = $state(true);
     let showModal = $state(false);
     let newName = $state("");
     let newTelp = $state("");
     let newUsername = $state("");
     let newPassword = $state("");
     let formError = $state("");
+    let isSubmitting = $state(false);
+
+    onMount(async () => {
+        await loadEmployees();
+    });
+
+    async function loadEmployees() {
+        try {
+            isLoading = true;
+            employees = await fetchEmployees();
+        } catch (e) {
+            console.error("Failed to load employees:", e);
+        } finally {
+            isLoading = false;
+        }
+    }
 
     function openModal() {
         newName = "";
@@ -72,7 +40,7 @@
         showModal = false;
     }
 
-    function addEmployee() {
+    async function addEmployee() {
         if (!newName.trim()) {
             formError = "Name is required";
             return;
@@ -90,28 +58,44 @@
             return;
         }
 
-        const nextId =
-            employees.length > 0
-                ? Math.max(...employees.map((e) => e.id)) + 1
-                : 1;
-        employees = [
-            ...employees,
-            {
-                id: nextId,
-                name: newName.trim(),
-                telp: newTelp.trim(),
+        try {
+            isSubmitting = true;
+            await createEmployee({
                 username: newUsername.trim(),
                 password: newPassword.trim(),
-                active: true,
-            },
-        ];
-        closeModal();
+                name: newName.trim(),
+                phone: newTelp.trim(),
+            });
+            await loadEmployees();
+            closeModal();
+        } catch (e: any) {
+            formError = e.message || "Failed to create employee. Please try again.";
+        } finally {
+            isSubmitting = false;
+        }
     }
 
-    function toggleActive(id: number) {
-        employees = employees.map((e) =>
-            e.id === id ? { ...e, active: !e.active } : e,
-        );
+    async function handleToggleActive(emp: Employee) {
+        try {
+            await toggleEmployeeActive(emp.id, !emp.isActive);
+            employees = employees.map((e) =>
+                e.id === emp.id ? { ...e, isActive: !e.isActive } : e,
+            );
+        } catch (e) {
+            console.error("Failed to toggle employee status:", e);
+        }
+    }
+
+    async function handleDelete(emp: Employee) {
+        if (!confirm(`Are you sure you want to delete "${emp.name}"?`)) {
+            return;
+        }
+        try {
+            await deleteEmployee(emp.id);
+            employees = employees.filter((e) => e.id !== emp.id);
+        } catch (e) {
+            console.error("Failed to delete employee:", e);
+        }
     }
 </script>
 
@@ -138,61 +122,90 @@
 
 <!-- Employee Table -->
 <div class="table-container">
-    <table class="employee-table">
-        <thead>
-            <tr>
-                <th class="col-no">No</th>
-                <th class="col-name">Name</th>
-                <th class="col-telp">Telp Number</th>
-                <th class="col-status">Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            {#each employees as emp, i}
-                <tr class:inactive={!emp.active}>
-                    <td class="col-no">{i + 1}</td>
-                    <td class="col-name">
-                        <div class="employee-name">
-                            <div
-                                class="employee-avatar"
-                                style="background: {emp.active
-                                    ? 'var(--color-primary)'
-                                    : 'var(--color-text-faint)'}"
-                            >
-                                {emp.name.charAt(0).toUpperCase()}
-                            </div>
-                            {emp.name}
-                        </div>
-                    </td>
-                    <td class="col-telp">{emp.telp}</td>
-                    <td class="col-status">
-                        <button
-                            class="toggle-btn"
-                            class:active={emp.active}
-                            onclick={() => toggleActive(emp.id)}
-                            title={emp.active
-                                ? "Click to deactivate"
-                                : "Click to activate"}
-                        >
-                            <span class="toggle-track">
-                                <span class="toggle-thumb"></span>
-                            </span>
-                            <span class="toggle-label"
-                                >{emp.active ? "Active" : "Inactive"}</span
-                            >
-                        </button>
-                    </td>
-                </tr>
-            {/each}
-            {#if employees.length === 0}
+    {#if isLoading}
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading employees...</p>
+        </div>
+    {:else}
+        <table class="employee-table">
+            <thead>
                 <tr>
-                    <td colspan="4" class="empty-state">
-                        No employees found. Click "Add Employee" to get started.
-                    </td>
+                    <th class="col-no">No</th>
+                    <th class="col-name">Name</th>
+                    <th class="col-telp">Phone</th>
+                    <th class="col-user">Username</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-action">Action</th>
                 </tr>
-            {/if}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {#each employees as emp, i}
+                    <tr class:inactive={!emp.isActive}>
+                        <td class="col-no">{i + 1}</td>
+                        <td class="col-name">
+                            <div class="employee-name">
+                                <div
+                                    class="employee-avatar"
+                                    style="background: {emp.isActive
+                                        ? 'var(--color-primary)'
+                                        : 'var(--color-text-faint)'}"
+                                >
+                                    {emp.name.charAt(0).toUpperCase()}
+                                </div>
+                                <span class="emp-name-text">{emp.name}</span>
+                            </div>
+                        </td>
+                        <td class="col-telp">{emp.phone || '-'}</td>
+                        <td class="col-user">@{emp.username}</td>
+                        <td class="col-status">
+                            <button
+                                class="toggle-btn"
+                                class:active={emp.isActive}
+                                onclick={() => handleToggleActive(emp)}
+                                title={emp.isActive
+                                    ? "Click to deactivate"
+                                    : "Click to activate"}
+                            >
+                                <span class="toggle-track">
+                                    <span class="toggle-thumb"></span>
+                                </span>
+                                <span class="toggle-label"
+                                    >{emp.isActive ? "Active" : "Inactive"}</span
+                                >
+                            </button>
+                        </td>
+                        <td class="col-action">
+                            <button
+                                class="btn-delete"
+                                onclick={() => handleDelete(emp)}
+                                title="Delete employee"
+                            >
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    ><polyline points="3 6 5 6 21 6" /><path
+                                        d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                                    /></svg
+                                >
+                            </button>
+                        </td>
+                    </tr>
+                {/each}
+                {#if employees.length === 0}
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            No employees found. Click "Add Employee" to get started.
+                        </td>
+                    </tr>
+                {/if}
+            </tbody>
+        </table>
+    {/if}
 </div>
 
 <!-- Add Employee Modal -->
@@ -263,7 +276,7 @@
                     <input
                         id="emp-user"
                         type="text"
-                        placeholder="Enter username"
+                        placeholder="Enter username (for login)"
                         bind:value={newUsername}
                     />
                 </div>
@@ -272,7 +285,7 @@
                     <input
                         id="emp-pass"
                         type="password"
-                        placeholder="Enter password"
+                        placeholder="Enter password (for login)"
                         bind:value={newPassword}
                     />
                 </div>
@@ -290,8 +303,15 @@
                     <button
                         type="submit"
                         class="btn-submit"
-                        id="btn-submit-employee">Save Employee</button
+                        id="btn-submit-employee"
+                        disabled={isSubmitting}
                     >
+                        {#if isSubmitting}
+                            Saving...
+                        {:else}
+                            Save Employee
+                        {/if}
+                    </button>
                 </div>
             </form>
         </div>
@@ -302,6 +322,61 @@
     /* ===== Page Actions ===== */
     .page-actions {
         margin-bottom: 24px;
+    }
+
+    /* ===== Loading State ===== */
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        color: var(--color-text-muted);
+    }
+
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--color-border);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ===== Action Button ===== */
+    .btn-delete {
+        background: transparent;
+        color: var(--color-text-faint);
+        padding: 6px;
+        border-radius: var(--radius-sm);
+        transition: all var(--transition-fast);
+    }
+
+    .btn-delete:hover {
+        background: rgba(255, 77, 106, 0.1);
+        color: var(--color-danger);
+    }
+
+    .col-action {
+        width: 80px;
+        text-align: center !important;
+    }
+
+    .col-user {
+        font-family: monospace;
+        color: var(--color-text-muted);
+    }
+
+    .emp-name-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 150px;
     }
 
     .btn-add {

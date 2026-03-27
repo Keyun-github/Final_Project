@@ -1,0 +1,9 @@
+# Keep your actual .env file private
+.env
+
+# Ignore backup files
+*.bak
+*.backup
+
+# Ignore SQL dump files unless they're the main setup
+# backup.sql

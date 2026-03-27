@@ -47,6 +47,7 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
   final FocusNode _searchFocus = FocusNode();
   List<Product> _products = [];
   bool _isLoading = true;
+  bool _isUsingDemoData = false;
 
   List<Product> get filteredProducts {
     var products = _products;
@@ -86,6 +87,7 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
         setState(() {
           _products = data.map((json) => Product.fromJson(json)).toList();
           _isLoading = false;
+          _isUsingDemoData = false;
         });
       }
     } catch (e) {
@@ -96,6 +98,7 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
         setState(() {
           _products = demoProducts;
           _isLoading = false;
+          _isUsingDemoData = true;
         });
       }
     }
@@ -315,63 +318,118 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
 
             const SizedBox(height: 8),
 
+            // ===== Demo Data Warning Banner =====
+            if (_isUsingDemoData)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.wifi_off,
+                      size: 18,
+                      color: Colors.orange.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Using demo data. Make sure backend is running on port 3000.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _loadProducts,
+                      child: Text(
+                        'Retry',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // ===== Product Grid =====
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : filteredProducts.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 64,
-                            color: Colors.grey[300],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Produk tidak ditemukan',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[500],
+              child: RefreshIndicator(
+                onRefresh: _loadProducts,
+                color: const Color(0xFF6C63FF),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredProducts.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              size: 64,
+                              color: Colors.grey[300],
                             ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : GridView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.62,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                          ),
-                      itemCount: filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final product = filteredProducts[index];
-                        return _ProductCard(
-                          product: product,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProductDetailPage(
-                                  product: product,
-                                  cart: _cart,
-                                ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Produk tidak ditemukan',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[500],
                               ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: _loadProducts,
+                              child: const Text('Refresh'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : GridView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 0.62,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                            ),
+                        itemCount: filteredProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = filteredProducts[index];
+                          return _ProductCard(
+                            product: product,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ProductDetailPage(
+                                    product: product,
+                                    cart: _cart,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
             ),
           ],
         ),
@@ -386,6 +444,15 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ProductCard({required this.product, required this.onTap});
+
+  String _getProductName() {
+    return product.name.isEmpty ? 'Unnamed Product' : product.name;
+  }
+
+  String _getProductImageUrl() {
+    if (product.imageUrl.isEmpty) return '';
+    return product.imageUrl;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -406,7 +473,6 @@ class _ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image
             Expanded(
               flex: 5,
               child: ClipRRect(
@@ -415,22 +481,46 @@ class _ProductCard extends StatelessWidget {
                 ),
                 child: Hero(
                   tag: 'product-${product.id}',
-                  child: Image.network(
-                    product.imageUrl,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, error) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Icon(Icons.image, size: 40, color: Colors.grey),
-                      ),
-                    ),
-                  ),
+                  child: _getProductImageUrl().isEmpty
+                      ? Container(
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: Icon(
+                              Icons.image,
+                              size: 40,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        )
+                      : Image.network(
+                          _getProductImageUrl(),
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Icon(
+                                Icons.image,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
               ),
             ),
-
-            // Product Info
             Expanded(
               flex: 4,
               child: Padding(
@@ -441,9 +531,8 @@ class _ProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Name
                     Text(
-                      product.name,
+                      _getProductName(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -453,8 +542,6 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-
-                    // Price
                     Text(
                       product.formattedPrice,
                       style: const TextStyle(
@@ -464,8 +551,6 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-
-                    // Rating & Sold
                     Row(
                       children: [
                         const Icon(
@@ -475,7 +560,7 @@ class _ProductCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 2),
                         Text(
-                          product.rating.toString(),
+                          product.rating.toStringAsFixed(1),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -493,8 +578,6 @@ class _ProductCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-
-                    // Seller location
                     Row(
                       children: [
                         Icon(

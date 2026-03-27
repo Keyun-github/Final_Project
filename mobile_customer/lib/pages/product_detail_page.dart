@@ -12,6 +12,12 @@ class ProductDetailPage extends StatelessWidget {
     required this.cart,
   });
 
+  String _getSellerInitial() {
+    final seller = product.seller;
+    if (seller.isEmpty) return 'O';
+    return seller[0].toUpperCase();
+  }
+
   void _showQuantitySelector(BuildContext context) {
     int quantity = 1;
     ProductVariant? selectedVariant = product.hasVariants
@@ -33,7 +39,6 @@ class ProductDetailPage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Handle bar
                   Container(
                     width: 40,
                     height: 4,
@@ -43,24 +48,11 @@ class ProductDetailPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Product info row
                   Row(
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          product.imageUrl,
-                          width: 70,
-                          height: 70,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, error) => Container(
-                            width: 70,
-                            height: 70,
-                            color: Colors.grey[200],
-                            child: const Icon(Icons.image),
-                          ),
-                        ),
+                        child: _buildProductImage(product.imageUrl, 70, 70),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -68,7 +60,9 @@ class ProductDetailPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              product.name,
+                              product.name.isEmpty
+                                  ? 'Unnamed Product'
+                                  : product.name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -93,8 +87,6 @@ class ProductDetailPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // Unit of Measure selector
                   if (product.hasVariants) ...[
                     Align(
                       alignment: Alignment.centerLeft,
@@ -155,8 +147,6 @@ class ProductDetailPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                   ],
-
-                  // Quantity selector
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -225,8 +215,6 @@ class ProductDetailPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // Add to Cart button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -282,6 +270,38 @@ class ProductDetailPage extends StatelessWidget {
     );
   }
 
+  Widget _buildProductImage(String imageUrl, double width, double height) {
+    if (imageUrl.isEmpty) {
+      return Container(
+        width: width,
+        height: height,
+        color: Colors.grey[200],
+        child: const Icon(Icons.image, color: Colors.grey),
+      );
+    }
+    return Image.network(
+      imageUrl,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: Colors.grey[200],
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        );
+      },
+      errorBuilder: (_, __, ___) => Container(
+        width: width,
+        height: height,
+        color: Colors.grey[200],
+        child: const Icon(Icons.image, color: Colors.grey),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -315,12 +335,10 @@ class ProductDetailPage extends StatelessWidget {
                 color: const Color(0xFFF5F5F5),
                 child: Hero(
                   tag: 'product-${product.id}',
-                  child: Image.network(
+                  child: _buildProductImage(
                     product.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, error) => const Center(
-                      child: Icon(Icons.image, size: 80, color: Colors.grey),
-                    ),
+                    double.infinity,
+                    360,
                   ),
                 ),
               ),
@@ -342,7 +360,7 @@ class ProductDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    product.name,
+                    product.name.isEmpty ? 'Unnamed Product' : product.name,
                     style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
@@ -360,7 +378,7 @@ class ProductDetailPage extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        product.rating.toString(),
+                        product.rating.toStringAsFixed(1),
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -384,7 +402,7 @@ class ProductDetailPage extends StatelessWidget {
                           0xFF6C63FF,
                         ).withValues(alpha: 0.1),
                         child: Text(
-                          product.seller[0],
+                          _getSellerInitial(),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF6C63FF),
@@ -432,7 +450,9 @@ class ProductDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    product.description,
+                    product.description.isEmpty
+                        ? 'Tidak ada deskripsi produk.'
+                        : product.description,
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.7,
@@ -471,11 +491,9 @@ class ProductDetailPage extends StatelessWidget {
                     Icons.chat_outlined,
                     color: Color(0xFF6C63FF),
                   ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Chat coming soon')),
-                    );
-                  },
+                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Chat coming soon')),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),

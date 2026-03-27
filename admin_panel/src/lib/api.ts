@@ -25,10 +25,40 @@ export async function createProduct(data: {
     description?: string;
     imageUrl?: string;
     category?: string;
-}) {
+    image?: File | null;
+}): Promise<any> {
+    if (data.image) {
+        const formData = new FormData();
+        formData.append('name', data.name);
+        formData.append('price', String(data.price));
+        formData.append('stock', String(data.stock));
+        formData.append('unit', data.unit);
+        if (data.description) formData.append('description', data.description);
+        if (data.category) formData.append('category', data.category);
+        formData.append('image', data.image);
+
+        const res = await fetch(`${BASE_URL}/products`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: res.statusText }));
+            throw new Error(err.message || res.statusText);
+        }
+        return res.json();
+    }
+
     return request('/products', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+            name: data.name,
+            price: data.price,
+            stock: data.stock,
+            unit: data.unit,
+            description: data.description,
+            imageUrl: data.imageUrl,
+            category: data.category,
+        }),
     });
 }
 
@@ -43,4 +73,40 @@ export async function fetchOrders() {
 
 export async function fetchOrderStats() {
     return request('/orders/stats');
+}
+
+// ----- Employees (Drivers) -----
+export interface Employee {
+    id: number;
+    username: string;
+    name: string;
+    phone: string;
+    isActive: boolean;
+}
+
+export async function fetchEmployees(): Promise<Employee[]> {
+    return request('/drivers');
+}
+
+export async function createEmployee(data: {
+    username: string;
+    password: string;
+    name: string;
+    phone?: string;
+}): Promise<Employee> {
+    return request('/drivers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function deleteEmployee(id: number) {
+    return request(`/drivers/${id}`, { method: 'DELETE' });
+}
+
+export async function toggleEmployeeActive(id: number, isActive: boolean) {
+    return request(`/drivers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ isActive }),
+    });
 }

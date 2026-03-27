@@ -2,23 +2,43 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Web: use localhost directly (browser handles it).
-  // Android emulator: use 10.0.2.2 to reach host's localhost.
-  // iOS simulator / macOS / physical device: use localhost.
-  // For a physical device on a different network, replace with your machine's IP.
+  // For local development:
+  // - Android emulator: use 10.0.2.2 to reach host's localhost
+  // - iOS simulator: use localhost
+  // - Physical device: Replace with your computer's local IP address (e.g., 192.168.1.x)
+  // IMPORTANT: Make sure the backend is running and accessible from your device
   static const String baseUrl = 'http://localhost:3000';
+
+  static bool _isUsingDemoData = false;
+  static bool get isUsingDemoData => _isUsingDemoData;
 
   // ===== Products =====
   static Future<List<Map<String, dynamic>>> fetchProducts() async {
-    final url = '$baseUrl/products';
-    print('[ApiService] Fetching products from: $url');
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      print('[ApiService] Loaded ${data.length} products from API');
-      return data.cast<Map<String, dynamic>>();
+    try {
+      final url = '$baseUrl/products';
+      print('[ApiService] Fetching products from: $url');
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw Exception(
+                'Connection timeout - backend may not be running',
+              );
+            },
+          );
+      if (response.statusCode == 200) {
+        _isUsingDemoData = false;
+        final List<dynamic> data = json.decode(response.body);
+        print('[ApiService] Loaded ${data.length} products from API');
+        return data.cast<Map<String, dynamic>>();
+      }
+      throw Exception('Failed to load products: ${response.statusCode}');
+    } catch (e) {
+      print('[ApiService] Error fetching products: $e');
+      _isUsingDemoData = true;
+      rethrow;
     }
-    throw Exception('Failed to load products: ${response.statusCode}');
   }
 
   // ===== Orders =====

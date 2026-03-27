@@ -7,7 +7,9 @@ class ProductVariant {
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
     return ProductVariant(
       unitName: json['unitName'] ?? '',
-      price: (json['price'] is num) ? json['price'].toDouble() : double.tryParse(json['price'].toString()) ?? 0,
+      price: (json['price'] is num)
+          ? json['price'].toDouble()
+          : double.tryParse(json['price'].toString()) ?? 0,
     );
   }
 
@@ -50,19 +52,26 @@ class Product {
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    final seller = json['seller']?.toString() ?? '';
     return Product(
       id: json['id'] ?? 0,
       name: json['name'] ?? '',
       description: json['description'] ?? '',
-      price: (json['price'] is num) ? json['price'].toDouble() : double.tryParse(json['price'].toString()) ?? 0,
-      imageUrl: json['imageUrl'] ?? '',
-      category: json['category'] ?? '',
-      rating: (json['rating'] is num) ? json['rating'].toDouble() : double.tryParse(json['rating'].toString()) ?? 4.5,
+      price: (json['price'] is num)
+          ? json['price'].toDouble()
+          : double.tryParse(json['price']?.toString() ?? '') ?? 0,
+      imageUrl: json['imageUrl']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+      rating: (json['rating'] is num)
+          ? json['rating'].toDouble()
+          : double.tryParse(json['rating']?.toString() ?? '') ?? 4.5,
       sold: json['sold'] ?? 0,
-      seller: json['seller'] ?? 'Official Store',
-      sellerCity: json['sellerCity'] ?? 'Jakarta',
+      seller: seller.isEmpty ? 'Official Store' : seller,
+      sellerCity: json['sellerCity']?.toString() ?? 'Jakarta',
       variants: json['variants'] != null
-          ? (json['variants'] as List).map((v) => ProductVariant.fromJson(v)).toList()
+          ? (json['variants'] as List)
+                .map((v) => ProductVariant.fromJson(v))
+                .toList()
           : null,
     );
   }
