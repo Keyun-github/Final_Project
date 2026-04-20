@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     import { fetchOrderStats } from "$lib/api";
 
     // ---- Dashboard Stats & Charts ----
@@ -21,7 +21,23 @@
         (_, i) => `${i.toString().padStart(2, "0")}:00`,
     );
 
+    let pollInterval: any = $state(null);
+
     onMount(async () => {
+        await loadStats();
+        // Start polling every 30 seconds for real-time updates
+        pollInterval = setInterval(() => {
+            loadStats();
+        }, 30000);
+    });
+
+    onDestroy(() => {
+        if (pollInterval) {
+            clearInterval(pollInterval);
+        }
+    });
+
+    async function loadStats() {
         try {
             const data = await fetchOrderStats();
             const revenue = Number(data.revenueToday || 0);
@@ -36,7 +52,7 @@
         } catch (e) {
             console.error("Failed to load dashboard stats:", e);
         }
-    });
+    }
 </script>
 
 <!-- Stats Grid -->

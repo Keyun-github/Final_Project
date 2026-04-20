@@ -1,18 +1,70 @@
 import 'package:flutter/material.dart';
+import '../models/order_model.dart';
+import '../services/api_service.dart';
+import 'change_password_page.dart';
+import 'vehicle_info_page.dart';
+import 'order_history_page.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   final String driverName;
+  final int driverId;
   final int totalDelivered;
   final int totalOrders;
+  final List<OrderModel> completedOrders;
   final VoidCallback onLogout;
 
   const ProfilePage({
     super.key,
     required this.driverName,
+    required this.driverId,
     required this.totalDelivered,
     required this.totalOrders,
+    required this.completedOrders,
     required this.onLogout,
   });
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String _vehicleBrand = '';
+  String _vehiclePlate = '';
+  String _vehicleColor = '';
+  bool _isLoadingVehicle = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVehicleInfo();
+  }
+
+  Future<void> _loadVehicleInfo() async {
+    try {
+      final driver = await ApiService.getDriver(widget.driverId);
+      if (driver != null && mounted) {
+        setState(() {
+          _vehicleBrand = driver['vehicleBrand'] ?? '';
+          _vehiclePlate = driver['vehiclePlate'] ?? '';
+          _vehicleColor = driver['vehicleColor'] ?? '';
+          _isLoadingVehicle = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingVehicle = false);
+      }
+    }
+  }
+
+  String get _vehicleInfo {
+    if (_vehicleBrand.isEmpty &&
+        _vehiclePlate.isEmpty &&
+        _vehicleColor.isEmpty) {
+      return 'Belum diatur';
+    }
+    return '$_vehicleBrand • $_vehiclePlate';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +88,7 @@ class ProfilePage extends StatelessWidget {
                   radius: 44,
                   backgroundColor: Colors.white.withValues(alpha: 0.2),
                   child: Text(
-                    driverName.isNotEmpty ? driverName[0] : 'D',
+                    widget.driverName.isNotEmpty ? widget.driverName[0] : 'D',
                     style: const TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.w800,
@@ -46,7 +98,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  driverName,
+                  widget.driverName,
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -87,7 +139,7 @@ class ProfilePage extends StatelessWidget {
                   children: [
                     _ProfileStat(
                       label: 'Total Pesanan',
-                      value: '$totalOrders',
+                      value: '${widget.totalOrders}',
                       icon: Icons.assignment,
                     ),
                     Container(
@@ -97,18 +149,8 @@ class ProfilePage extends StatelessWidget {
                     ),
                     _ProfileStat(
                       label: 'Selesai',
-                      value: '$totalDelivered',
+                      value: '${widget.totalDelivered}',
                       icon: Icons.check_circle,
-                    ),
-                    Container(
-                      width: 1,
-                      height: 40,
-                      color: Colors.white.withValues(alpha: 0.2),
-                    ),
-                    const _ProfileStat(
-                      label: 'Rating',
-                      value: '4.8',
-                      icon: Icons.star,
                     ),
                   ],
                 ),
@@ -126,19 +168,17 @@ class ProfilePage extends StatelessWidget {
                 title: 'Akun',
                 items: [
                   _MenuItem(
-                    icon: Icons.person_outline,
-                    label: 'Edit Profil',
-                    onTap: () => _showComingSoon(context),
-                  ),
-                  _MenuItem(
                     icon: Icons.lock_outline,
                     label: 'Ubah Password',
-                    onTap: () => _showComingSoon(context),
-                  ),
-                  _MenuItem(
-                    icon: Icons.notifications_outlined,
-                    label: 'Notifikasi',
-                    onTap: () => _showComingSoon(context),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ChangePasswordPage(driverId: widget.driverId),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -149,30 +189,46 @@ class ProfilePage extends StatelessWidget {
                   _MenuItem(
                     icon: Icons.two_wheeler,
                     label: 'Info Kendaraan',
-                    subtitle: 'Yamaha NMAX • B 1234 XYZ',
-                    onTap: () => _showComingSoon(context),
-                  ),
-                  _MenuItem(
-                    icon: Icons.description_outlined,
-                    label: 'Dokumen',
-                    onTap: () => _showComingSoon(context),
+                    subtitle: _isLoadingVehicle ? 'Memuat...' : _vehicleInfo,
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => VehicleInfoPage(
+                            driverId: widget.driverId,
+                            initialVehicleBrand: _vehicleBrand,
+                            initialVehiclePlate: _vehiclePlate,
+                            initialVehicleColor: _vehicleColor,
+                          ),
+                        ),
+                      );
+                      if (result != null && mounted) {
+                        _loadVehicleInfo();
+                      }
+                    },
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               _MenuSection(
-                title: 'Lainnya',
+                title: 'Riwayat',
                 items: [
                   _MenuItem(
-                    icon: Icons.help_outline,
-                    label: 'Bantuan',
-                    onTap: () => _showComingSoon(context),
-                  ),
-                  _MenuItem(
-                    icon: Icons.info_outline,
-                    label: 'Tentang Aplikasi',
-                    subtitle: 'Versi 1.0.0',
-                    onTap: () => _showComingSoon(context),
+                    icon: Icons.history,
+                    label: 'Riwayat Pesanan',
+                    subtitle:
+                        '${widget.completedOrders.length} pesanan selesai',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrderHistoryPage(
+                            driverName: widget.driverName,
+                            completedOrders: widget.completedOrders,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -197,7 +253,7 @@ class ProfilePage extends StatelessWidget {
                           ElevatedButton(
                             onPressed: () {
                               Navigator.pop(ctx);
-                              onLogout();
+                              widget.onLogout();
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFE53935),

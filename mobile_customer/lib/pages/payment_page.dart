@@ -5,16 +5,24 @@ import 'order_tracking_page.dart';
 
 class PaymentPage extends StatefulWidget {
   final CartProvider cart;
+  final int? customerId;
   final String customerName;
   final String customerPhone;
   final String customerAddress;
+  final String deliveryTime;
+  final String? deliveryDate;
+  final String? deliverySlot;
 
   const PaymentPage({
     super.key,
     required this.cart,
+    this.customerId,
     required this.customerName,
     required this.customerPhone,
     required this.customerAddress,
+    required this.deliveryTime,
+    this.deliveryDate,
+    this.deliverySlot,
   });
 
   @override
@@ -22,46 +30,8 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
-  String _selectedMethod = 'BCA Virtual Account';
+  String _selectedMethod = 'Midtrans';
   bool _isProcessing = false;
-
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {
-      'name': 'BCA Virtual Account',
-      'icon': Icons.account_balance,
-      'color': const Color(0xFF003D79),
-    },
-    {
-      'name': 'BNI Virtual Account',
-      'icon': Icons.account_balance,
-      'color': const Color(0xFFFF6600),
-    },
-    {
-      'name': 'Mandiri Virtual Account',
-      'icon': Icons.account_balance,
-      'color': const Color(0xFF003366),
-    },
-    {
-      'name': 'GoPay',
-      'icon': Icons.account_balance_wallet,
-      'color': const Color(0xFF00AED6),
-    },
-    {
-      'name': 'OVO',
-      'icon': Icons.account_balance_wallet,
-      'color': const Color(0xFF4C3494),
-    },
-    {
-      'name': 'DANA',
-      'icon': Icons.account_balance_wallet,
-      'color': const Color(0xFF108EE9),
-    },
-    {
-      'name': 'COD (Bayar di Tempat)',
-      'icon': Icons.payments_outlined,
-      'color': const Color(0xFF43A047),
-    },
-  ];
 
   void _processPayment() async {
     setState(() {
@@ -69,47 +39,103 @@ class _PaymentPageState extends State<PaymentPage> {
     });
 
     try {
+      // Book time slot if available
+      if (widget.deliveryDate != null && widget.deliverySlot != null) {
+        await ApiService.bookTimeSlot(
+          widget.deliveryDate!,
+          widget.deliverySlot!,
+        );
+      }
+
       // Submit order to backend API
-      await ApiService.createOrder(
+      final orderResponse = await ApiService.createOrder(
+        customerId: widget.customerId,
         customerName: widget.customerName,
         customerPhone: widget.customerPhone,
         deliveryAddress: widget.customerAddress,
         totalAmount: widget.cart.totalPrice,
         paymentMethod: _selectedMethod,
-        items: widget.cart.items.map((item) => {
-          'productName': item.product.name,
-          'unitName': item.selectedUnit ?? '',
-          'unitPrice': item.effectivePrice,
-          'quantity': item.quantity,
-        }).toList(),
+        items: widget.cart.items
+            .map(
+              (item) => {
+                'productName': item.product.name,
+                'unitName': item.selectedUnit ?? '',
+                'unitPrice': item.effectivePrice,
+                'quantity': item.quantity,
+              },
+            )
+            .toList(),
       );
-    } catch (e) {
-      // If API fails, still proceed (order saved locally in spirit)
-      debugPrint('Failed to submit order to API: $e');
-    }
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isProcessing = false;
-    });
+      setState(() {
+        _isProcessing = false;
+      });
 
-    // Navigate to order tracking
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OrderTrackingPage(
-          customerName: widget.customerName,
-          customerAddress: widget.customerAddress,
-          paymentMethod: _selectedMethod,
-          totalAmount: widget.cart.formattedTotal,
+      // Navigate to order tracking
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OrderTrackingPage(
+            customerName: widget.customerName,
+            customerAddress: widget.customerAddress,
+            paymentMethod: _selectedMethod,
+            totalAmount: widget.cart.formattedTotal,
+            deliveryTime: widget.deliveryTime,
+            orderId: orderResponse['id'],
+          ),
         ),
-      ),
-      (route) => route.isFirst, // Keep only the home page
-    );
+        (route) => route.isFirst, // Keep only the home page
+      );
 
-    // Clear cart
-    widget.cart.clearCart();
+      // Clear cart
+      widget.cart.clearCart();
+    } on StockException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+      });
+      _showStockError(e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+      });
+      _showStockError('Terjadi kesalahan: ${e.toString()}');
+    }
+  }
+
+  void _showStockError(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange[600]),
+            const SizedBox(width: 8),
+            const Text(
+              'Stok Tidak Cukup',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'OK',
+              style: TextStyle(
+                color: Color(0xFF6C63FF),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -278,90 +304,82 @@ class _PaymentPageState extends State<PaymentPage> {
 
                   const SizedBox(height: 28),
 
-                  // ===== Payment Methods =====
+                  // ===== Payment Method (Midtrans Only) =====
                   const Text(
                     'Metode Pembayaran',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 14),
-                  ...List.generate(_paymentMethods.length, (index) {
-                    final method = _paymentMethods[index];
-                    final isSelected = _selectedMethod == method['name'];
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedMethod = method['name'] as String;
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF6C63FF)
-                                : Colors.grey[200]!,
-                            width: isSelected ? 2 : 1,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF6C63FF,
-                                    ).withValues(alpha: 0.1),
-                                    blurRadius: 8,
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: (method['color'] as Color).withValues(
-                                  alpha: 0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                method['icon'] as IconData,
-                                color: method['color'] as Color,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Text(
-                                method['name'] as String,
-                                style: TextStyle(
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  fontSize: 14,
-                                  color: isSelected
-                                      ? const Color(0xFF6C63FF)
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                            if (isSelected)
-                              const Icon(
-                                Icons.check_circle,
-                                color: Color(0xFF6C63FF),
-                                size: 22,
-                              ),
-                          ],
-                        ),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFF6C63FF),
+                        width: 2,
                       ),
-                    );
-                  }),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF0065F8,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'M',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0065F8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Midtrans',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: Color(0xFF6C63FF),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Bank Transfer, E-Wallet, QRIS, dll',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF6C63FF),
+                          size: 22,
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 80),
                 ],
               ),

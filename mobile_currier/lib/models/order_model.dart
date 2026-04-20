@@ -1,6 +1,7 @@
 class OrderModel {
   final String id;
-  final int? apiId; // numeric id from API
+  final int? apiId;
+  final int? driverId;
   final String customerName;
   final String customerPhone;
   final String pickupAddress;
@@ -14,10 +15,12 @@ class OrderModel {
   final double pickupLng;
   final double deliveryLat;
   final double deliveryLng;
+  final String? deliveryPhoto;
 
   OrderModel({
     required this.id,
     this.apiId,
+    this.driverId,
     required this.customerName,
     required this.customerPhone,
     required this.pickupAddress,
@@ -31,21 +34,33 @@ class OrderModel {
     this.pickupLng = 106.8456,
     this.deliveryLat = -6.1944,
     this.deliveryLng = 106.8229,
+    this.deliveryPhoto,
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     final items = json['items'] as List? ?? [];
-    final itemNames = items.map((i) => '${i['productName']} x${i['quantity']}').join(', ');
-    final itemCount = items.fold<int>(0, (sum, i) => sum + ((i['quantity'] ?? 1) as int));
+    final itemNames = items
+        .map((i) => '${i['productName']} x${i['quantity']}')
+        .join(', ');
+    final itemCount = items.fold<int>(
+      0,
+      (sum, i) => sum + ((i['quantity'] ?? 1) as int),
+    );
 
     return OrderModel(
-      id: 'ORD-${DateTime.tryParse(json['createdAt'] ?? '')?.toLocal().toString().substring(0, 10).replaceAll('-', '') ?? 'API'}-${String.fromCharCode(48 + (json['id'] as int? ?? 0) % 10)}${String.fromCharCode(48 + ((json['id'] as int? ?? 0) ~/ 10) % 10)}${json['id'] ?? 0}'.length > 3
+      id:
+          'ORD-${DateTime.tryParse(json['createdAt'] ?? '')?.toLocal().toString().substring(0, 10).replaceAll('-', '') ?? 'API'}-${String.fromCharCode(48 + (json['id'] as int? ?? 0) % 10)}${String.fromCharCode(48 + ((json['id'] as int? ?? 0) ~/ 10) % 10)}${json['id'] ?? 0}'
+                  .length >
+              3
           ? 'ORD-${json['id'].toString().padLeft(3, '0')}'
           : 'ORD-${json['id'] ?? 0}',
       apiId: json['id'],
+      driverId: json['driverId'],
       customerName: json['customerName'] ?? '',
       customerPhone: json['customerPhone'] ?? '',
-      pickupAddress: json['pickupAddress'] ?? 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+      pickupAddress:
+          json['pickupAddress'] ??
+          'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
       deliveryAddress: json['deliveryAddress'] ?? '',
       itemDescription: itemNames.isNotEmpty ? itemNames : 'Order items',
       itemCount: itemCount > 0 ? itemCount : 1,
@@ -58,6 +73,7 @@ class OrderModel {
       pickupLng: 106.8686,
       deliveryLat: -6.1944 + (json['id'] as int? ?? 0) * 0.01,
       deliveryLng: 106.8229 + (json['id'] as int? ?? 0) * 0.005,
+      deliveryPhoto: json['deliveryPhoto'],
     );
   }
 
@@ -148,7 +164,7 @@ List<OrderModel> demoOrders = [
     itemDescription: 'Telur Ayam 1 Box, Susu UHT 1 Box',
     itemCount: 2,
     totalAmount: 120000,
-    status: OrderStatus.pickingUp,
+    status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
     pickupLat: -6.1275,
     pickupLng: 106.8686,
@@ -164,7 +180,7 @@ List<OrderModel> demoOrders = [
     itemDescription: 'Gula Pasir 25kg (x1)',
     itemCount: 1,
     totalAmount: 325000,
-    status: OrderStatus.delivering,
+    status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 20)),
     pickupLat: -6.1275,
     pickupLng: 106.8686,
@@ -180,7 +196,7 @@ List<OrderModel> demoOrders = [
     itemDescription: 'Tepung Terigu 50kg (x1), Kopi Bubuk 500g (x3)',
     itemCount: 4,
     totalAmount: 695000,
-    status: OrderStatus.delivered,
+    status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(hours: 3)),
     pickupLat: -6.1275,
     pickupLng: 106.8686,

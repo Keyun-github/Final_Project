@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class LoginPage extends StatefulWidget {
-  final Function(String) onLogin;
+  final Function(String name, int id) onLogin;
 
   const LoginPage({super.key, required this.onLogin});
 
@@ -67,7 +67,7 @@ class _LoginPageState extends State<LoginPage>
 
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
-        widget.onLogin(data['name']);
+        widget.onLogin(data['name'], data['id']);
       } else {
         final errorData = json.decode(response.body);
         setState(() => _error = errorData['message'] ?? 'Login gagal');

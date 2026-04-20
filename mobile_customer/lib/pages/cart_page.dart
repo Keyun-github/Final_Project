@@ -4,8 +4,9 @@ import 'checkout_page.dart';
 
 class CartPage extends StatefulWidget {
   final CartProvider cart;
+  final Map<String, dynamic>? customer;
 
-  const CartPage({super.key, required this.cart});
+  const CartPage({super.key, required this.cart, this.customer});
 
   @override
   State<CartPage> createState() => _CartPageState();
@@ -46,7 +47,7 @@ class _CartPageState extends State<CartPage> {
           if (cart.items.isNotEmpty)
             TextButton(
               onPressed: () {
-                cart.clearCart();
+                cart.clearCartAndSave();
               },
               child: const Text(
                 'Hapus Semua',
@@ -267,10 +268,24 @@ class _CartPageState extends State<CartPage> {
                         height: 48,
                         child: ElevatedButton(
                           onPressed: () {
+                            if (widget.customer == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Silakan login terlebih dahulu',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => CheckoutPage(cart: cart),
+                                builder: (_) => CheckoutPage(
+                                  cart: cart,
+                                  customer: widget.customer!,
+                                ),
                               ),
                             );
                           },

@@ -17,11 +17,13 @@ class CourierApp extends StatefulWidget {
 class _CourierAppState extends State<CourierApp> {
   bool _isLoggedIn = false;
   String _driverName = '';
+  int _driverId = 0;
 
-  void _onLogin(String name) {
+  void _onLogin(String name, int id) {
     setState(() {
       _isLoggedIn = true;
       _driverName = name;
+      _driverId = id;
     });
   }
 
@@ -29,6 +31,7 @@ class _CourierAppState extends State<CourierApp> {
     setState(() {
       _isLoggedIn = false;
       _driverName = '';
+      _driverId = 0;
     });
   }
 
@@ -46,7 +49,11 @@ class _CourierAppState extends State<CourierApp> {
         useMaterial3: true,
       ),
       home: _isLoggedIn
-          ? HomePage(driverName: _driverName, onLogout: _onLogout)
+          ? HomePage(
+              driverName: _driverName,
+              driverId: _driverId,
+              onLogout: _onLogout,
+            )
           : LoginPage(onLogin: _onLogin),
     );
   }

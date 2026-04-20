@@ -4,6 +4,9 @@ import 'models/product.dart';
 import 'providers/cart_provider.dart';
 import 'pages/product_detail_page.dart';
 import 'pages/cart_page.dart';
+import 'pages/login_page.dart';
+import 'pages/register_page.dart';
+import 'pages/account_page.dart';
 import 'services/api_service.dart';
 
 void main() {
@@ -48,6 +51,7 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
   List<Product> _products = [];
   bool _isLoading = true;
   bool _isUsingDemoData = false;
+  Map<String, dynamic>? _customer;
 
   List<Product> get filteredProducts {
     var products = _products;
@@ -89,6 +93,9 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
           _isLoading = false;
           _isUsingDemoData = false;
         });
+        if (_customer != null) {
+          await _cart.loadCart(_customer!['id'], _products);
+        }
       }
     } catch (e) {
       // Fallback to demo data if API is unavailable
@@ -100,6 +107,9 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
           _isLoading = false;
           _isUsingDemoData = true;
         });
+        if (_customer != null) {
+          await _cart.loadCart(_customer!['id'], _products);
+        }
       }
     }
   }
@@ -155,6 +165,56 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
                   ),
                   const Spacer(),
 
+                  // Account Icon
+                  IconButton(
+                    icon: Icon(
+                      _customer != null ? Icons.person : Icons.person_outline,
+                      size: 26,
+                      color: _customer != null
+                          ? const Color(0xFF6C63FF)
+                          : Colors.black87,
+                    ),
+                    onPressed: () {
+                      if (_customer != null) {
+                        // Show account page
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AccountPage(
+                              customer: _customer!,
+                              onLogout: () {
+                                setState(() => _customer = null);
+                                Navigator.pop(context);
+                              },
+                              onCustomerUpdated: (updatedCustomer) {
+                                setState(() => _customer = updatedCustomer);
+                              },
+                              onLogoutWithCartClear: () {
+                                _cart.clearCart();
+                                setState(() => _customer = null);
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ),
+                        );
+                      } else {
+                        // Show login page
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => LoginPage(
+                              onLogin: (customer) async {
+                                setState(() => _customer = customer);
+                                await _cart.loadCart(customer['id'], _products);
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+
                   // Cart Icon with Badge
                   Stack(
                     children: [
@@ -168,7 +228,8 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => CartPage(cart: _cart),
+                              builder: (_) =>
+                                  CartPage(cart: _cart, customer: _customer),
                             ),
                           );
                         },
@@ -415,16 +476,44 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
                           final product = filteredProducts[index];
                           return _ProductCard(
                             product: product,
-                            onTap: () {
-                              Navigator.push(
+                            onTap: () async {
+                              if (_customer == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Silakan login terlebih dahulu',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => LoginPage(
+                                      onLogin: (customer) async {
+                                        setState(() => _customer = customer);
+                                        await _cart.loadCart(
+                                          customer['id'],
+                                          _products,
+                                        );
+                                        Navigator.pop(context);
+                                      },
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => ProductDetailPage(
                                     product: product,
                                     cart: _cart,
+                                    customer: _customer,
                                   ),
                                 ),
                               );
+                              _loadProducts();
                             },
                           );
                         },
@@ -550,7 +639,6 @@ class _ProductCard extends StatelessWidget {
                         color: Color(0xFFE53935),
                       ),
                     ),
-                    const Spacer(),
                     Row(
                       children: [
                         const Icon(
@@ -580,6 +668,14 @@ class _ProductCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
+                        Text(
+                          'Stok: ${product.stock}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Icon(
                           Icons.location_on,
                           size: 12,

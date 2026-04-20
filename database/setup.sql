@@ -87,6 +87,20 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 
 -- ============================================
+-- 6. TIME SLOTS TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS time_slots (
+    id SERIAL PRIMARY KEY,
+    "slotTime" VARCHAR(10) NOT NULL,
+    "slotDate" VARCHAR(20) NOT NULL,
+    bookings INTEGER DEFAULT 0,
+    "maxBookings" INTEGER DEFAULT 3,
+    "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE("slotTime", "slotDate")
+);
+
+-- ============================================
 -- INDEXES FOR BETTER PERFORMANCE
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);

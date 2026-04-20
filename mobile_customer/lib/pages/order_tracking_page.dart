@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:math';
+import '../services/api_service.dart';
 
 class OrderTrackingPage extends StatefulWidget {
   final String customerName;
   final String customerAddress;
   final String paymentMethod;
   final String totalAmount;
+  final String? deliveryTime;
+  final int? orderId;
 
   const OrderTrackingPage({
     super.key,
@@ -14,6 +16,8 @@ class OrderTrackingPage extends StatefulWidget {
     required this.customerAddress,
     required this.paymentMethod,
     required this.totalAmount,
+    this.deliveryTime,
+    this.orderId,
   });
 
   @override
@@ -21,53 +25,81 @@ class OrderTrackingPage extends StatefulWidget {
 }
 
 class _OrderTrackingPageState extends State<OrderTrackingPage> {
-  // Simulated driver position (starts from warehouse, moves toward customer)
-  double _driverLat = -6.2000;
-  double _driverLng = 106.8400;
-  String _driverStatus = 'Mengambil pesanan dari toko...';
-  int _statusIndex = 0;
-  Timer? _timer;
+  Map<String, dynamic>? _orderData;
+  bool _isLoading = true;
+  Timer? _refreshTimer;
 
-  final List<Map<String, dynamic>> _statusSteps = [
-    {'label': 'Pesanan dikonfirmasi', 'icon': Icons.check_circle, 'done': true},
-    {'label': 'Pembayaran berhasil', 'icon': Icons.payment, 'done': true},
-    {'label': 'Driver mengambil pesanan', 'icon': Icons.store, 'done': false},
-    {'label': 'Dalam perjalanan', 'icon': Icons.delivery_dining, 'done': false},
-    {'label': 'Pesanan tiba', 'icon': Icons.home, 'done': false},
-  ];
+  String get _currentStatusText {
+    if (_orderData == null) return 'Menunggu driver menerima pesanan...';
+    switch (_orderData!['status']) {
+      case 'pending':
+        return 'Menunggu driver menerima pesanan...';
+      case 'pickingUp':
+        return 'Driver menuju pickup...';
+      case 'pickedUp':
+        return 'Driver mengambil pesanan';
+      case 'delivering':
+        return 'Driver dalam perjalanan ke lokasi Anda';
+      case 'delivered':
+        return 'Pesanan telah tiba!';
+      default:
+        return 'Menunggu...';
+    }
+  }
+
+  int get _currentStatusIndex {
+    if (_orderData == null) return 0;
+    switch (_orderData!['status']) {
+      case 'pending':
+        return 0;
+      case 'pickingUp':
+      case 'pickedUp':
+        return 1;
+      case 'delivering':
+        return 2;
+      case 'delivered':
+        return 3;
+      default:
+        return 0;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    // Simulate driver movement
-    _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (!mounted) return;
-      setState(() {
-        final rng = Random();
-        _driverLat += (rng.nextDouble() - 0.3) * 0.002;
-        _driverLng += (rng.nextDouble() - 0.3) * 0.002;
+    _loadOrderData();
+    _startAutoRefresh();
+  }
 
-        if (timer.tick == 3) {
-          _statusIndex = 2;
-          _driverStatus = 'Driver sedang mengambil pesanan...';
-          _statusSteps[2]['done'] = true;
-        } else if (timer.tick == 6) {
-          _statusIndex = 3;
-          _driverStatus = 'Driver dalam perjalanan ke lokasi Anda';
-          _statusSteps[3]['done'] = true;
-        } else if (timer.tick >= 10) {
-          _statusIndex = 4;
-          _driverStatus = 'Pesanan telah tiba!';
-          _statusSteps[4]['done'] = true;
-          timer.cancel();
-        }
-      });
+  Future<void> _loadOrderData() async {
+    if (widget.orderId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final data = await ApiService.fetchOrder(widget.orderId!);
+      if (mounted) {
+        setState(() {
+          _orderData = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _startAutoRefresh() {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _loadOrderData();
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -90,369 +122,371 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
           },
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // ===== Map Section =====
-            Container(
-              height: 300,
-              color: Colors.white,
-              child: Stack(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
                 children: [
-                  // Map placeholder using a styled widget
+                  // Status Card
                   Container(
-                    width: double.infinity,
-                    height: 300,
-                    decoration: const BoxDecoration(color: Color(0xFFE8F5E9)),
-                    child: Stack(
-                      children: [
-                        // Grid lines to simulate map
-                        CustomPaint(
-                          size: const Size(double.infinity, 300),
-                          painter: _MapGridPainter(),
-                        ),
-
-                        // Driver marker
-                        Positioned(
-                          left: ((_driverLng - 106.83) * 5000).clamp(20, 360),
-                          top: ((_driverLat + 6.21) * 5000).clamp(20, 250),
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
-                                ),
-                                child: const Text(
-                                  '🛵 Driver',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              const Icon(
-                                Icons.location_on,
-                                color: Color(0xFF6C63FF),
-                                size: 36,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Customer marker (fixed)
-                        Positioned(
-                          right: 60,
-                          bottom: 60,
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                      blurRadius: 6,
-                                    ),
-                                  ],
-                                ),
-                                child: const Text(
-                                  '📍 Tujuan',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              const Icon(
-                                Icons.location_on,
-                                color: Color(0xFFE53935),
-                                size: 36,
-                              ),
-                            ],
-                          ),
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
                         ),
                       ],
                     ),
-                  ),
-
-                  // Status overlay
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: _statusIndex >= 4
-                                  ? const Color(0xFF00C853)
-                                  : const Color(0xFF6C63FF),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _driverStatus,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (_statusIndex < 4)
-                            const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF6C63FF),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ===== Driver Info =====
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: const Color(
-                      0xFF6C63FF,
-                    ).withValues(alpha: 0.1),
-                    child: const Text(
-                      'B',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Color(0xFF6C63FF),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Budi - Driver',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Honda Vario • B 1234 XYZ',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Call button
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00C853).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.phone, color: Color(0xFF00C853)),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Calling driver...')),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.chat, color: Color(0xFF6C63FF)),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Chat coming soon')),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ===== Order Status Timeline =====
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Status Pesanan',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 16),
-                  ...List.generate(_statusSteps.length, (index) {
-                    final step = _statusSteps[index];
-                    final isDone = step['done'] as bool;
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(
+                        Row(
                           children: [
-                            Icon(
-                              step['icon'] as IconData,
-                              size: 22,
-                              color: isDone
-                                  ? const Color(0xFF00C853)
-                                  : Colors.grey[300],
-                            ),
-                            if (index < _statusSteps.length - 1)
-                              Container(
-                                width: 2,
-                                height: 28,
-                                color: isDone
-                                    ? const Color(0xFF00C853)
-                                    : Colors.grey[200],
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF6C63FF,
+                                ).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
                               ),
+                              child: const Icon(
+                                Icons.local_shipping,
+                                color: Color(0xFF6C63FF),
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _currentStatusText,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  if (_orderData != null &&
+                                      _orderData!['driver'] != null) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF6C63FF,
+                                        ).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 20,
+                                                backgroundColor: const Color(
+                                                  0xFF6C63FF,
+                                                ),
+                                                child: Text(
+                                                  _orderData!['driver']['name']
+                                                          ?.toString()
+                                                          .substring(0, 1) ??
+                                                      'D',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      _orderData!['driver']['name'] ??
+                                                          'Driver',
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 15,
+                                                      ),
+                                                    ),
+                                                    if (_orderData!['driver']['phone'] !=
+                                                            null &&
+                                                        _orderData!['driver']['phone']
+                                                            .toString()
+                                                            .isNotEmpty)
+                                                      Text(
+                                                        '📱 ${_orderData!['driver']['phone']}',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color:
+                                                              Colors.grey[600],
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (_orderData!['driver']['vehiclePlate'] !=
+                                                  null &&
+                                              _orderData!['driver']['vehiclePlate']
+                                                  .toString()
+                                                  .isNotEmpty) ...[
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 6,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.directions_car,
+                                                    size: 16,
+                                                    color: Color(0xFF6C63FF),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    '${_orderData!['driver']['vehiclePlate']}',
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                  if (_orderData!['driver']['vehicleBrand'] !=
+                                                          null &&
+                                                      _orderData!['driver']['vehicleBrand']
+                                                          .toString()
+                                                          .isNotEmpty) ...[
+                                                    const Text(' - '),
+                                                    Text(
+                                                      '${_orderData!['driver']['vehicleBrand']}',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                  if (_orderData!['driver']['vehicleColor'] !=
+                                                          null &&
+                                                      _orderData!['driver']['vehicleColor']
+                                                          .toString()
+                                                          .isNotEmpty) ...[
+                                                    const Text(' - '),
+                                                    Text(
+                                                      '${_orderData!['driver']['vehicleColor']}',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(width: 14),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            step['label'] as String,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isDone
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: isDone ? Colors.black87 : Colors.grey[400],
-                            ),
-                          ),
+                      ],
+                    ),
+                  ),
+
+                  // Progress Steps
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
                         ),
                       ],
-                    );
-                  }),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Status Pengiriman',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _StatusStep(
+                          icon: Icons.check_circle,
+                          label: 'Pesanan Dikonfirmasi',
+                          isDone: true,
+                          isActive: _currentStatusIndex >= 0,
+                        ),
+                        _StatusStep(
+                          icon: Icons.store,
+                          label: 'Driver Menuju Pickup',
+                          isDone: _currentStatusIndex >= 1,
+                          isActive: _currentStatusIndex >= 1,
+                        ),
+                        _StatusStep(
+                          icon: Icons.local_shipping,
+                          label: 'Dalam Perjalanan',
+                          isDone: _currentStatusIndex >= 2,
+                          isActive: _currentStatusIndex >= 2,
+                        ),
+                        _StatusStep(
+                          icon: Icons.home,
+                          label: 'Pesanan Tiba',
+                          isDone: _currentStatusIndex >= 3,
+                          isActive: _currentStatusIndex >= 3,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Order Details
+                  Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Detail Pesanan',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _DetailRow(
+                          label: 'Pelanggan',
+                          value: widget.customerName,
+                        ),
+                        _DetailRow(
+                          label: 'Alamat',
+                          value: widget.customerAddress,
+                        ),
+                        _DetailRow(
+                          label: 'Pembayaran',
+                          value: widget.paymentMethod,
+                        ),
+                        _DetailRow(label: 'Total', value: widget.totalAmount),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
+    );
+  }
+}
 
-            const SizedBox(height: 16),
+class _StatusStep extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isDone;
+  final bool isActive;
 
-            // ===== Order Details =====
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Detail Pesanan',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 12),
-                  _detailRow('Penerima', widget.customerName),
-                  _detailRow('Alamat', widget.customerAddress),
-                  _detailRow('Pembayaran', widget.paymentMethod),
-                  _detailRow('Total', widget.totalAmount),
-                ],
+  const _StatusStep({
+    required this.icon,
+    required this.label,
+    required this.isDone,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDone
+                  ? const Color(0xFF6C63FF)
+                  : isActive
+                  ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
+                  : Colors.grey[200],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: isDone
+                  ? Colors.white
+                  : isActive
+                  ? const Color(0xFF6C63FF)
+                  : Colors.grey[400],
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                color: isActive ? Colors.black87 : Colors.grey[400],
               ),
             ),
-            const SizedBox(height: 30),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _detailRow(String label, String value) {
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -460,7 +494,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
             width: 100,
             child: Text(
               label,
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             ),
           ),
           Expanded(
@@ -473,51 +507,4 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
       ),
     );
   }
-}
-
-// Custom painter for map grid background
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFC8E6C9)
-      ..strokeWidth = 0.5;
-
-    // Draw grid lines
-    for (double x = 0; x < size.width; x += 40) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += 40) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-
-    // Draw some "roads"
-    final roadPaint = Paint()
-      ..color = const Color(0xFFFFFFFF)
-      ..strokeWidth = 6;
-
-    canvas.drawLine(
-      Offset(0, size.height * 0.4),
-      Offset(size.width, size.height * 0.4),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.3, 0),
-      Offset(size.width * 0.3, size.height),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.7, 0),
-      Offset(size.width * 0.7, size.height),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(0, size.height * 0.7),
-      Offset(size.width, size.height * 0.7),
-      roadPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

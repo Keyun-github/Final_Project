@@ -5,11 +5,13 @@ import '../providers/cart_provider.dart';
 class ProductDetailPage extends StatelessWidget {
   final Product product;
   final CartProvider cart;
+  final Map<String, dynamic>? customer;
 
   const ProductDetailPage({
     super.key,
     required this.product,
     required this.cart,
+    this.customer,
   });
 
   String _getSellerInitial() {
@@ -195,63 +197,124 @@ class ProductDetailPage extends StatelessWidget {
                       ),
                       GestureDetector(
                         onTap: () {
-                          setModalState(() {
-                            quantity++;
-                          });
+                          if (quantity < product.stock) {
+                            setModalState(() {
+                              quantity++;
+                            });
+                          }
                         },
                         child: Container(
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
+                            border: Border.all(
+                              color: quantity >= product.stock
+                                  ? Colors.grey[200]!
+                                  : Colors.grey[300]!,
+                            ),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.add,
-                            color: Color(0xFF6C63FF),
+                            color: quantity >= product.stock
+                                ? Colors.grey[300]
+                                : const Color(0xFF6C63FF),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  // Stock info
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2,
+                          color: Colors.grey[600],
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          product.stock > 0
+                              ? 'Stok tersedia: ${product.stock}'
+                              : 'Stok habis',
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        for (int i = 0; i < quantity; i++) {
-                          cart.addToCart(
-                            product,
-                            selectedUnit: selectedVariant?.unitName,
-                            unitPrice: selectedVariant?.price,
-                          );
-                        }
-                        Navigator.pop(ctx);
-                        final unitLabel = selectedVariant != null
-                            ? ' (${selectedVariant!.unitName})'
-                            : '';
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '$quantity x ${product.name}$unitLabel ditambahkan ke keranjang',
-                            ),
-                            backgroundColor: const Color(0xFF00C853),
-                            duration: const Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
+                      onPressed: product.stock <= 0
+                          ? null
+                          : () {
+                              if (customer == null) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Silakan login terlebih dahulu',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              // Limit quantity to available stock
+                              int actualQuantity = quantity;
+                              if (quantity > product.stock) {
+                                actualQuantity = product.stock;
+                              }
+
+                              for (int i = 0; i < actualQuantity; i++) {
+                                cart.addToCart(
+                                  product,
+                                  selectedUnit: selectedVariant?.unitName,
+                                  unitPrice: selectedVariant?.price,
+                                );
+                              }
+                              Navigator.pop(ctx);
+                              final unitLabel = selectedVariant != null
+                                  ? ' (${selectedVariant!.unitName})'
+                                  : '';
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '$actualQuantity x ${product.name}$unitLabel ditambahkan ke keranjang',
+                                  ),
+                                  backgroundColor: const Color(0xFF00C853),
+                                  duration: const Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
                       icon: const Icon(Icons.add_shopping_cart, size: 20),
-                      label: const Text(
-                        'Tambah ke Keranjang',
-                        style: TextStyle(
+                      label: Text(
+                        product.stock <= 0
+                            ? 'Stok Habis'
+                            : 'Tambah ke Keranjang',
+                        style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6C63FF),
+                        backgroundColor: product.stock <= 0
+                            ? Colors.grey
+                            : const Color(0xFF6C63FF),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -388,6 +451,31 @@ class ProductDetailPage extends StatelessWidget {
                       Text(
                         '${product.sold} terjual',
                         style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: product.stock > 0
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          product.stock > 0
+                              ? 'Stok: ${product.stock}'
+                              : 'Stok Habis',
+                          style: TextStyle(
+                            color: product.stock > 0
+                                ? Colors.green[700]
+                                : Colors.red[700],
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ),

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/order_model.dart';
 import 'delivery_map_page.dart';
+import 'delivery_confirmation_page.dart';
+import 'photo_confirmation_page.dart';
 
-class OrderDetailPage extends StatelessWidget {
+class OrderDetailPage extends StatefulWidget {
   final OrderModel order;
   final Function(String, OrderStatus) onStatusUpdate;
 
@@ -12,8 +15,45 @@ class OrderDetailPage extends StatelessWidget {
     required this.onStatusUpdate,
   });
 
+  @override
+  State<OrderDetailPage> createState() => _OrderDetailPageState();
+}
+
+class _OrderDetailPageState extends State<OrderDetailPage> {
+  late OrderModel _order;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = widget.order;
+  }
+
+  void _updateLocalOrderStatus(OrderStatus newStatus) {
+    setState(() {
+      _order = OrderModel(
+        id: _order.id,
+        apiId: _order.apiId,
+        driverId: _order.driverId,
+        customerName: _order.customerName,
+        customerPhone: _order.customerPhone,
+        pickupAddress: _order.pickupAddress,
+        deliveryAddress: _order.deliveryAddress,
+        itemDescription: _order.itemDescription,
+        itemCount: _order.itemCount,
+        totalAmount: _order.totalAmount,
+        status: newStatus,
+        createdAt: _order.createdAt,
+        pickupLat: _order.pickupLat,
+        pickupLng: _order.pickupLng,
+        deliveryLat: _order.deliveryLat,
+        deliveryLng: _order.deliveryLng,
+        deliveryPhoto: _order.deliveryPhoto,
+      );
+    });
+  }
+
   OrderStatus? _nextStatus() {
-    switch (order.status) {
+    switch (_order.status) {
       case OrderStatus.pending:
         return OrderStatus.pickingUp;
       case OrderStatus.pickingUp:
@@ -28,7 +68,7 @@ class OrderDetailPage extends StatelessWidget {
   }
 
   String _nextLabel() {
-    switch (order.status) {
+    switch (_order.status) {
       case OrderStatus.pending:
         return 'Mulai Pickup';
       case OrderStatus.pickingUp:
@@ -43,7 +83,7 @@ class OrderDetailPage extends StatelessWidget {
   }
 
   IconData _nextIcon() {
-    switch (order.status) {
+    switch (_order.status) {
       case OrderStatus.pending:
         return Icons.directions_walk;
       case OrderStatus.pickingUp:
@@ -58,7 +98,7 @@ class OrderDetailPage extends StatelessWidget {
   }
 
   Color _statusColor() {
-    switch (order.status) {
+    switch (_order.status) {
       case OrderStatus.pending:
         return const Color(0xFFFFA726);
       case OrderStatus.pickingUp:
@@ -75,7 +115,7 @@ class OrderDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor();
-    final isDelivered = order.status == OrderStatus.delivered;
+    final isDelivered = _order.status == OrderStatus.delivered;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -88,15 +128,15 @@ class OrderDetailPage extends StatelessWidget {
         foregroundColor: Colors.black87,
         elevation: 0.5,
         actions: [
-          if (order.status == OrderStatus.delivering ||
-              order.status == OrderStatus.pickingUp)
+          if (_order.status == OrderStatus.delivering ||
+              _order.status == OrderStatus.pickingUp)
             IconButton(
               icon: const Icon(Icons.map_outlined, color: Color(0xFF1565C0)),
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => DeliveryMapPage(order: order),
+                    builder: (_) => DeliveryMapPage(order: _order),
                   ),
                 );
               },
@@ -126,7 +166,7 @@ class OrderDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    order.statusLabel,
+                    _order.statusLabel,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -135,7 +175,7 @@ class OrderDetailPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    order.id,
+                    _order.id,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.7),
                       fontSize: 13,
@@ -151,8 +191,8 @@ class OrderDetailPage extends StatelessWidget {
               title: 'Informasi Pelanggan',
               icon: Icons.person,
               children: [
-                _InfoRow(label: 'Nama', value: order.customerName),
-                _InfoRow(label: 'Telepon', value: order.customerPhone),
+                _InfoRow(label: 'Nama', value: _order.customerName),
+                _InfoRow(label: 'Telepon', value: _order.customerPhone),
               ],
             ),
             const SizedBox(height: 12),
@@ -164,7 +204,7 @@ class OrderDetailPage extends StatelessWidget {
               children: [
                 _AddressSection(
                   label: 'Pickup',
-                  address: order.pickupAddress,
+                  address: _order.pickupAddress,
                   icon: Icons.store,
                   color: const Color(0xFF1565C0),
                 ),
@@ -181,7 +221,7 @@ class OrderDetailPage extends StatelessWidget {
                 ),
                 _AddressSection(
                   label: 'Pengiriman',
-                  address: order.deliveryAddress,
+                  address: _order.deliveryAddress,
                   icon: Icons.location_on,
                   color: const Color(0xFFE53935),
                 ),
@@ -194,11 +234,11 @@ class OrderDetailPage extends StatelessWidget {
               title: 'Detail Barang',
               icon: Icons.inventory_2,
               children: [
-                _InfoRow(label: 'Barang', value: order.itemDescription),
-                _InfoRow(label: 'Jumlah', value: '${order.itemCount} item'),
+                _InfoRow(label: 'Barang', value: _order.itemDescription),
+                _InfoRow(label: 'Jumlah', value: '${_order.itemCount} item'),
                 _InfoRow(
                   label: 'Total',
-                  value: order.formattedAmount,
+                  value: _order.formattedAmount,
                   valueStyle: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -217,31 +257,88 @@ class OrderDetailPage extends StatelessWidget {
                 _StatusStep(
                   label: 'Pesanan Diterima',
                   isDone: true,
-                  isActive: order.status == OrderStatus.pending,
+                  isActive: _order.status == OrderStatus.pending,
                 ),
                 _StatusStep(
                   label: 'Menuju Pickup',
-                  isDone: order.status.index >= OrderStatus.pickingUp.index,
-                  isActive: order.status == OrderStatus.pickingUp,
+                  isDone: _order.status.index >= OrderStatus.pickingUp.index,
+                  isActive: _order.status == OrderStatus.pickingUp,
                 ),
                 _StatusStep(
                   label: 'Barang Diambil',
-                  isDone: order.status.index >= OrderStatus.pickedUp.index,
-                  isActive: order.status == OrderStatus.pickedUp,
+                  isDone: _order.status.index >= OrderStatus.pickedUp.index,
+                  isActive: _order.status == OrderStatus.pickedUp,
                 ),
                 _StatusStep(
                   label: 'Dalam Perjalanan',
-                  isDone: order.status.index >= OrderStatus.delivering.index,
-                  isActive: order.status == OrderStatus.delivering,
+                  isDone: _order.status.index >= OrderStatus.delivering.index,
+                  isActive: _order.status == OrderStatus.delivering,
                 ),
                 _StatusStep(
                   label: 'Terkirim',
-                  isDone: order.status == OrderStatus.delivered,
-                  isActive: order.status == OrderStatus.delivered,
+                  isDone: _order.status == OrderStatus.delivered,
+                  isActive: _order.status == OrderStatus.delivered,
                   isLast: true,
                 ),
               ],
             ),
+
+            // Delivery Photo (only show if delivered and has photo)
+            if (isDelivered &&
+                _order.deliveryPhoto != null &&
+                _order.deliveryPhoto!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _InfoCard(
+                  title: 'Bukti Pengantaran',
+                  icon: Icons.photo_camera,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        height: 200,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _order.deliveryPhoto!.startsWith('http')
+                            ? Image.network(
+                                _order.deliveryPhoto!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    size: 48,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              )
+                            : _order.deliveryPhoto!.contains('uploads')
+                            ? Image.network(
+                                'http://localhost:3000/${_order.deliveryPhoto}',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    size: 48,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.image,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             const SizedBox(height: 100),
           ],
         ),
@@ -264,8 +361,8 @@ class OrderDetailPage extends StatelessWidget {
               child: SafeArea(
                 child: Row(
                   children: [
-                    if (order.status == OrderStatus.delivering ||
-                        order.status == OrderStatus.pickingUp)
+                    if (_order.status == OrderStatus.delivering ||
+                        _order.status == OrderStatus.pickingUp)
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
                         child: SizedBox(
@@ -275,7 +372,8 @@ class OrderDetailPage extends StatelessWidget {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => DeliveryMapPage(order: order),
+                                  builder: (_) =>
+                                      DeliveryMapPage(order: _order),
                                 ),
                               );
                             },
@@ -295,11 +393,70 @@ class OrderDetailPage extends StatelessWidget {
                       child: SizedBox(
                         height: 50,
                         child: ElevatedButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
                             final next = _nextStatus();
                             if (next != null) {
-                              onStatusUpdate(order.id, next);
-                              Navigator.pop(context);
+                              if (next == OrderStatus.delivered) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => DeliveryConfirmationPage(
+                                      orderId: _order.apiId ?? 0,
+                                      onConfirm: () async {
+                                        debugPrint(
+                                          '[OrderDetailPage] Calling onStatusUpdate with delivered',
+                                        );
+                                        await widget.onStatusUpdate(
+                                          _order.id,
+                                          next,
+                                        );
+                                        _updateLocalOrderStatus(next);
+                                        debugPrint(
+                                          '[OrderDetailPage] Status updated, now navigating to home...',
+                                        );
+                                        Navigator.of(context).pop();
+                                        await Future.delayed(
+                                          const Duration(milliseconds: 100),
+                                        );
+                                        if (context.mounted) {
+                                          Navigator.of(context).pop();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                );
+                              } else if (next == OrderStatus.pickedUp) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => PhotoConfirmationPage(
+                                      orderId: _order.apiId ?? 0,
+                                      title: 'Konfirmasi Pickup',
+                                      subtitle:
+                                          'Ambil foto barang yang akan diambil',
+                                      onConfirm: () async {
+                                        debugPrint(
+                                          '[OrderDetailPage] Calling onStatusUpdate with ${next.name}',
+                                        );
+                                        await widget.onStatusUpdate(
+                                          _order.id,
+                                          next,
+                                        );
+                                        _updateLocalOrderStatus(next);
+                                        if (context.mounted) {
+                                          Navigator.pop(context);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                debugPrint(
+                                  '[OrderDetailPage] Calling onStatusUpdate with ${next.name}',
+                                );
+                                await widget.onStatusUpdate(_order.id, next);
+                                _updateLocalOrderStatus(next);
+                              }
                             }
                           },
                           icon: Icon(_nextIcon(), size: 20),

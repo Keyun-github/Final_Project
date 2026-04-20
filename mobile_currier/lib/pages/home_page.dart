@@ -6,9 +6,15 @@ import 'profile_page.dart';
 
 class HomePage extends StatefulWidget {
   final String driverName;
+  final int driverId;
   final VoidCallback onLogout;
 
-  const HomePage({super.key, required this.driverName, required this.onLogout});
+  const HomePage({
+    super.key,
+    required this.driverName,
+    required this.driverId,
+    required this.onLogout,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -27,18 +33,24 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadOrders() async {
     try {
-      final data = await ApiService.fetchOrders();
+      final assignedData = await ApiService.fetchOrdersByDriver(
+        widget.driverId,
+      );
+      final pendingData = await ApiService.fetchPendingOrders();
       if (mounted) {
+        final allOrders = [
+          ...assignedData.map((json) => OrderModel.fromJson(json)),
+          ...pendingData.map((json) => OrderModel.fromJson(json)),
+        ];
         setState(() {
-          orders = data.map((json) => OrderModel.fromJson(json)).toList();
+          orders = allOrders;
           _isLoading = false;
         });
       }
     } catch (e) {
-      // Fallback to demo data if API is unavailable
       if (mounted) {
         setState(() {
-          orders = List.from(demoOrders);
+          orders = [];
           _isLoading = false;
         });
       }
@@ -48,38 +60,110 @@ class _HomePageState extends State<HomePage> {
   void _updateOrderStatus(String orderId, OrderStatus newStatus) async {
     // Find the order to get apiId
     final idx = orders.indexWhere((o) => o.id == orderId);
-    if (idx == -1) return;
+    if (idx == -1) {
+      debugPrint('[_updateOrderStatus] Order not found: $orderId');
+      return;
+    }
 
     final old = orders[idx];
 
-    // Update locally first for responsive UI
-    setState(() {
-      orders[idx] = OrderModel(
-        id: old.id,
-        apiId: old.apiId,
-        customerName: old.customerName,
-        customerPhone: old.customerPhone,
-        pickupAddress: old.pickupAddress,
-        deliveryAddress: old.deliveryAddress,
-        itemDescription: old.itemDescription,
-        itemCount: old.itemCount,
-        totalAmount: old.totalAmount,
-        status: newStatus,
-        createdAt: old.createdAt,
-        pickupLat: old.pickupLat,
-        pickupLng: old.pickupLng,
-        deliveryLat: old.deliveryLat,
-        deliveryLng: old.deliveryLng,
-      );
-    });
+    debugPrint('[_updateOrderStatus] ========== START ==========');
+    debugPrint('[_updateOrderStatus] Order local ID: $orderId');
+    debugPrint('[_updateOrderStatus] Order API ID: ${old.apiId}');
+    debugPrint('[_updateOrderStatus] Current status: ${old.status}');
+    debugPrint('[_updateOrderStatus] New status: $newStatus');
+    debugPrint('[_updateOrderStatus] API value: ${newStatus.apiValue}');
 
-    // Then update via API
+    // Then update via API first to check if it works
     if (old.apiId != null) {
       try {
-        await ApiService.updateOrderStatus(old.apiId!, newStatus.apiValue);
+        // Use acceptOrder when transitioning from pending to pickingUp (driver accepts the order)
+        if (old.status == OrderStatus.pending &&
+            newStatus == OrderStatus.pickingUp) {
+          await ApiService.acceptOrder(old.apiId!, widget.driverId);
+          debugPrint('[_updateOrderStatus] acceptOrder successful');
+        } else {
+          debugPrint('[_updateOrderStatus] Calling updateOrderStatus...');
+          final result = await ApiService.updateOrderStatus(
+            old.apiId!,
+            newStatus.apiValue,
+          );
+          debugPrint('[_updateOrderStatus] updateOrderStatus result: $result');
+        }
+
+        // Only update local state after API succeeds
+        if (mounted) {
+          setState(() {
+            orders[idx] = OrderModel(
+              id: old.id,
+              apiId: old.apiId,
+              customerName: old.customerName,
+              customerPhone: old.customerPhone,
+              pickupAddress: old.pickupAddress,
+              deliveryAddress: old.deliveryAddress,
+              itemDescription: old.itemDescription,
+              itemCount: old.itemCount,
+              totalAmount: old.totalAmount,
+              status: newStatus,
+              createdAt: old.createdAt,
+              pickupLat: old.pickupLat,
+              pickupLng: old.pickupLng,
+              deliveryLat: old.deliveryLat,
+              deliveryLng: old.deliveryLng,
+              deliveryPhoto: old.deliveryPhoto,
+            );
+          });
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                newStatus == OrderStatus.delivered
+                    ? 'Pesanan berhasil dikunci! 📦'
+                    : 'Status pesanan diperbarui',
+              ),
+              backgroundColor: const Color(0xFF66BB6A),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Refresh the orders list to ensure UI reflects latest status
+          _loadOrders();
+        }
       } catch (e) {
-        debugPrint('Failed to update order status via API: $e');
+        debugPrint('[_updateOrderStatus] FAILED: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal memperbarui status: $e'),
+              backgroundColor: const Color(0xFFE53935),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
+    } else {
+      // No apiId - update locally only
+      setState(() {
+        orders[idx] = OrderModel(
+          id: old.id,
+          apiId: old.apiId,
+          customerName: old.customerName,
+          customerPhone: old.customerPhone,
+          pickupAddress: old.pickupAddress,
+          deliveryAddress: old.deliveryAddress,
+          itemDescription: old.itemDescription,
+          itemCount: old.itemCount,
+          totalAmount: old.totalAmount,
+          status: newStatus,
+          createdAt: old.createdAt,
+          pickupLat: old.pickupLat,
+          pickupLng: old.pickupLng,
+          deliveryLat: old.deliveryLat,
+          deliveryLng: old.deliveryLng,
+          deliveryPhoto: old.deliveryPhoto,
+        );
+      });
     }
   }
 
@@ -94,10 +178,14 @@ class _HomePageState extends State<HomePage> {
             )
           : ProfilePage(
               driverName: widget.driverName,
+              driverId: widget.driverId,
               totalDelivered: orders
                   .where((o) => o.status == OrderStatus.delivered)
                   .length,
               totalOrders: orders.length,
+              completedOrders: orders
+                  .where((o) => o.status == OrderStatus.delivered)
+                  .toList(),
               onLogout: widget.onLogout,
             ),
       bottomNavigationBar: NavigationBar(
@@ -137,9 +225,6 @@ class _OrdersTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeOrders = orders
         .where((o) => o.status != OrderStatus.delivered)
-        .toList();
-    final completedOrders = orders
-        .where((o) => o.status == OrderStatus.delivered)
         .toList();
     final pendingCount = orders
         .where((o) => o.status == OrderStatus.pending)
@@ -270,7 +355,8 @@ class _OrdersTab extends StatelessWidget {
                           _StatChip(
                             icon: Icons.check_circle,
                             label: 'Selesai',
-                            value: '${completedOrders.length}',
+                            value:
+                                '${orders.where((o) => o.status == OrderStatus.delivered).length}',
                             color: const Color(0xFF66BB6A),
                           ),
                         ],
@@ -317,46 +403,6 @@ class _OrdersTab extends StatelessWidget {
                   },
                 ),
                 childCount: activeOrders.length,
-              ),
-            ),
-          ),
-        ],
-
-        // Completed Orders
-        if (completedOrders.isNotEmpty) ...[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                'Selesai (${completedOrders.length})',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (ctx, i) => _OrderCard(
-                  order: completedOrders[i],
-                  isCompleted: true,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => OrderDetailPage(
-                          order: completedOrders[i],
-                          onStatusUpdate: onStatusUpdate,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                childCount: completedOrders.length,
               ),
             ),
           ),

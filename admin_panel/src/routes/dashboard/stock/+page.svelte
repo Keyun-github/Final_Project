@@ -3,12 +3,19 @@
     import { fetchProducts, createProduct, deleteProduct } from "$lib/api";
 
     // ---- Stock Management ----
+    interface Variant {
+        id: number;
+        unitName: string;
+        price: number;
+    }
+
     interface StockItem {
         id: number;
         name: string;
         price: number;
         stock: number;
         unit: string;
+        variants: Variant[];
     }
 
     let items = $state<StockItem[]>([]);
@@ -24,10 +31,22 @@
     let newImagePreview = $state("");
     let formError = $state("");
 
+    import { onDestroy } from "svelte";
+
     const unitOptions = ["KG", "Box", "Sack - 25kg", "Sack - 50kg", "Piece"];
+
+    let refreshInterval: ReturnType<typeof setInterval>;
 
     onMount(async () => {
         await loadProducts();
+        // Auto-refresh every 30 seconds
+        refreshInterval = setInterval(() => {
+            loadProducts();
+        }, 30000);
+    });
+
+    onDestroy(() => {
+        if (refreshInterval) clearInterval(refreshInterval);
     });
 
     async function loadProducts() {
@@ -40,6 +59,11 @@
                 price: Number(p.price),
                 stock: p.stock ?? 0,
                 unit: p.unit ?? "Piece",
+                variants: (p.variants ?? []).map((v: any) => ({
+                    id: v.id,
+                    unitName: v.unitName,
+                    price: Number(v.price),
+                })),
             }));
         } catch (e) {
             console.error("Failed to load products:", e);
@@ -158,23 +182,38 @@
             id="search-stock"
         />
     </div>
-    <button class="btn-add" onclick={openModal} id="btn-add-stock">
-        <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            ><line x1="12" y1="5" x2="12" y2="19" /><line
-                x1="5"
-                y1="12"
-                x2="19"
-                y2="12"
-            /></svg
-        >
-        Add Item
-    </button>
+    <div class="action-buttons">
+        <button class="btn-refresh" onclick={loadProducts} title="Refresh Stock">
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+            Refresh
+        </button>
+        <button class="btn-add" onclick={openModal} id="btn-add-stock">
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><line x1="12" y1="5" x2="12" y2="19" /><line
+                    x1="5"
+                    y1="12"
+                    x2="19"
+                    y2="12"
+                /></svg
+            >
+            Add Item
+        </button>
+    </div>
 </div>
 
 <!-- Stock Table -->
@@ -217,7 +256,16 @@
                                     /></svg
                                 >
                             </div>
-                            {item.name}
+                            <div class="item-info">
+                                <span class="item-name">{item.name}</span>
+                                {#if item.variants.length > 0}
+                                    <div class="variant-badges">
+                                        {#each item.variants as variant}
+                                            <span class="variant-badge">{variant.unitName}</span>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
                         </div>
                     </td>
                     <td class="col-price">{formatRupiah(item.price)}</td>
@@ -446,6 +494,32 @@
         box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
     }
 
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-refresh {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: white;
+        color: var(--color-text);
+        font-size: 0.9rem;
+        font-weight: 600;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+    }
+
+    .btn-refresh:hover {
+        background: rgba(108, 99, 255, 0.05);
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
+
     .btn-add {
         display: inline-flex;
         align-items: center;
@@ -541,6 +615,32 @@
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
+    }
+
+    .item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .item-name {
+        font-weight: 500;
+    }
+
+    .variant-badges {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+
+    .variant-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: rgba(108, 99, 255, 0.06);
+        color: var(--color-primary);
+        font-size: 0.7rem;
+        font-weight: 600;
     }
 
     .stock-badge {

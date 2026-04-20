@@ -35,6 +35,7 @@ class Product {
   final int sold;
   final String seller;
   final String sellerCity;
+  final int stock;
   final List<ProductVariant>? variants;
 
   const Product({
@@ -48,6 +49,7 @@ class Product {
     this.sold = 0,
     this.seller = 'Official Store',
     this.sellerCity = 'Jakarta',
+    this.stock = 0,
     this.variants,
   });
 
@@ -68,6 +70,7 @@ class Product {
       sold: json['sold'] ?? 0,
       seller: seller.isEmpty ? 'Official Store' : seller,
       sellerCity: json['sellerCity']?.toString() ?? 'Jakarta',
+      stock: json['stock'] ?? 0,
       variants: json['variants'] != null
           ? (json['variants'] as List)
                 .map((v) => ProductVariant.fromJson(v))
