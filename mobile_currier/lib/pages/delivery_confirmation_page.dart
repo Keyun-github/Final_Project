@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import '../services/supabase_service.dart';
 
 class DeliveryConfirmationPage extends StatefulWidget {
   final int orderId;
@@ -164,25 +165,37 @@ class _DeliveryConfirmationPageState extends State<DeliveryConfirmationPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Upload photo first
+      // Upload photo to Supabase first
       if (_orderId > 0) {
         final String? photoPath =
             _deliveryPhotoXFile?.path ?? _deliveryPhoto?.path;
         if (photoPath != null) {
           debugPrint(
-            '[_confirmDelivery] Uploading photo for order $_orderId: $photoPath',
+            '[_confirmDelivery] Uploading photo to Supabase for order $_orderId: $photoPath',
           );
-          final photoResult = await ApiService.uploadDeliveryPhoto(
-            _orderId,
-            photoPath,
-          );
-          if (photoResult != null) {
+
+          // Upload to Supabase
+          final supabaseUrl = await SupabaseService.uploadDeliveryPhoto(photoPath);
+
+          if (supabaseUrl != null) {
             debugPrint(
-              '[_confirmDelivery] Photo upload successful: $photoResult',
+              '[_confirmDelivery] Supabase upload successful: $supabaseUrl',
             );
+
+            // Save URL to backend
+            final saved = await ApiService.saveDeliveryPhotoUrl(
+              _orderId,
+              supabaseUrl,
+            );
+
+            if (saved) {
+              debugPrint('[_confirmDelivery] URL saved to backend');
+            } else {
+              debugPrint('[_confirmDelivery] Failed to save URL to backend');
+            }
           } else {
             debugPrint(
-              '[_confirmDelivery] Photo upload returned null - continuing anyway',
+              '[_confirmDelivery] Supabase upload returned null - continuing anyway',
             );
           }
         }

@@ -233,6 +233,24 @@
     }
 </script>
 
+<!-- Action Bar -->
+<div class="action-bar">
+    <button class="btn-refresh" onclick={loadOrders} title="Refresh Orders">
+        <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+        >
+            <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+            <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+        </svg>
+        Refresh
+    </button>
+</div>
+
 <!-- Orders Table -->
 <div class="table-container">
     {#if isLoading}
@@ -550,6 +568,36 @@
     .btn-icon:hover {
         background: rgba(108, 99, 255, 0.1);
         color: var(--color-primary);
+    }
+
+    /* Action Bar */
+    .action-bar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin-bottom: 16px;
+        gap: 12px;
+    }
+
+    .btn-refresh {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        background: white;
+        color: var(--color-text);
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-border);
+        transition: all var(--transition-fast);
+        cursor: pointer;
+    }
+
+    .btn-refresh:hover {
+        background: var(--color-primary);
+        border-color: var(--color-primary);
+        color: white;
     }
 
     .empty-state {

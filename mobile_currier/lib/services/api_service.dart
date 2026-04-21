@@ -168,4 +168,24 @@ class ApiService {
       return null;
     }
   }
+
+  // New method to save Supabase URL to backend
+  static Future<bool> saveDeliveryPhotoUrl(int orderId, String photoUrl) async {
+    try {
+      debugPrint('[ApiService] saveDeliveryPhotoUrl called: orderId=$orderId, photoUrl=$photoUrl');
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/orders/$orderId/photo-url'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'photoUrl': photoUrl}),
+      );
+
+      debugPrint('[ApiService] saveDeliveryPhotoUrl response: ${response.statusCode}');
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] saveDeliveryPhotoUrl error: $e');
+      return false;
+    }
+  }
 }

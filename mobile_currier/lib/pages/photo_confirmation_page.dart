@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import '../services/supabase_service.dart';
 
 class PhotoConfirmationPage extends StatefulWidget {
   final int orderId;
@@ -138,9 +139,24 @@ class _PhotoConfirmationPageState extends State<PhotoConfirmationPage> {
         final String? photoPath = _photoXFile?.path ?? _photo?.path;
         if (photoPath != null) {
           debugPrint(
-            '[_confirm] Uploading photo for order $_orderId: $photoPath',
+            '[_confirm] Uploading photo to Supabase for order $_orderId: $photoPath',
           );
-          await ApiService.uploadDeliveryPhoto(_orderId, photoPath);
+
+          // Upload to Supabase
+          final supabaseUrl = await SupabaseService.uploadDeliveryPhoto(photoPath);
+
+          if (supabaseUrl != null) {
+            debugPrint(
+              '[_confirm] Supabase upload successful: $supabaseUrl',
+            );
+
+            // Save URL to backend
+            await ApiService.saveDeliveryPhotoUrl(_orderId, supabaseUrl);
+          } else {
+            debugPrint(
+              '[_confirm] Supabase upload returned null - continuing anyway',
+            );
+          }
         }
       }
 
