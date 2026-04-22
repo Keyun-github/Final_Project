@@ -59,6 +59,9 @@
                 price: Number(p.price),
                 stock: p.stock ?? 0,
                 unit: p.unit ?? "Piece",
+                leadTime: p.leadTime ?? 3,
+                safetyStock: p.safetyStock ?? 5,
+                sold: p.sold ?? 0,
                 variants: (p.variants ?? []).map((v: any) => ({
                     id: v.id,
                     unitName: v.unitName,
@@ -88,6 +91,16 @@
 
     function formatRupiah(val: number): string {
         return "Rp " + val.toLocaleString("id-ID");
+    }
+
+    function needsReorder(item: any): boolean {
+        // ROP calculation: ROP = (Lead Time × Avg Daily Sales) + Safety Stock
+        // Using Lead Time and Safety Stock from product, Avg Daily Sales = sold / 7 (last 7 days approximation)
+        const leadTime = item.leadTime ?? 3;
+        const safetyStock = item.safetyStock ?? 5;
+        const avgDailySales = (item.sold ?? 0) / 7;
+        const rop = (leadTime * avgDailySales) + safetyStock;
+        return item.stock <= rop;
     }
 
     function openModal() {
@@ -226,6 +239,7 @@
                 <th>Price</th>
                 <th>Stock</th>
                 <th>Unit</th>
+                <th>Status</th>
                 <th class="col-action">Action</th>
             </tr>
         </thead>
@@ -280,6 +294,13 @@
                         </span>
                     </td>
                     <td><span class="unit-badge">{item.unit}</span></td>
+                    <td>
+                        {#if needsReorder(item)}
+                            <span class="status-badge warning">Need Reorder</span>
+                        {:else}
+                            <span class="status-badge ok">OK</span>
+                        {/if}
+                    </td>
                     <td class="col-action">
                         <button
                             class="btn-delete"
@@ -675,6 +696,24 @@
         color: var(--color-primary);
         font-size: 0.8rem;
         font-weight: 600;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-badge.warning {
+        background: var(--color-warning);
+        color: white;
+    }
+
+    .status-badge.ok {
+        background: var(--color-success);
+        color: white;
     }
 
     .btn-delete {

@@ -66,6 +66,24 @@ export async function deleteProduct(id: number) {
     return request(`/products/${id}`, { method: 'DELETE' });
 }
 
+export async function fetchLowStockProducts() {
+    return request('/products/low-stock');
+}
+
+export async function fetchProductROP(id: number) {
+    return request(`/products/${id}/rop`);
+}
+
+export async function updateProductROPConfig(
+    id: number,
+    data: { leadTime?: number; safetyStock?: number },
+) {
+    return request(`/products/${id}/rop-config`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+    });
+}
+
 // ----- Orders -----
 export async function fetchOrders() {
     return request('/orders');

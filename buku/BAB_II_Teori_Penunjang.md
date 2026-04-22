@@ -7,7 +7,7 @@ Pengembangan sistem multiplatform memerlukan penggunaan beberapa framework dan b
 
 ### 2.1.1 NestJS
 
-NestJS adalah framework server-side untuk Node.js yang efisien, dapat diskalakan (scalable), dan dibangun dengan dukungan penuh TypeScript. Framework ini menggabungkan elemen-elemen dari Pemrograman Berorientasi Objek (OOP), Pemrograman Fungsional (FP), dan Pemrograman Reaktif Fungsional (FRP).
+NestJS adalah framework server-side untuk Node.js yang efisien, dapat diskalakan, dan dibangun dengan dukungan penuh TypeScript. Framework ini menggabungkan elemen-elemen dari Pemrograman Berorientasi Objek (OOP), Pemrograman Fungsional (FP), dan Pemrograman Reaktif Fungsional (FRP).
 
 Struktur modular NestJS sangat mirip dengan Angular, yang memungkinkan pengembang mengorganisir kode ke dalam modul-modul terpisah seperti Modul Auth, Modul Produk, Modul Logistik, dan lainnya. Pendekatan ini menjadikan kode lebih rapi, mudah diuji, dan mudah dipelihara dibandingkan framework Node.js konvensional.
 
@@ -15,7 +15,7 @@ Dalam arsitektur sistem ini, NestJS berfungsi sebagai backend utama yang menanga
 
 ### 2.1.2 SvelteKit
 
-SvelteKit adalah meta-framework untuk membangun aplikasi web modern yang dibangun di atas library Svelte. Berbeda dengan framework tradisional seperti React atau Vue yang melakukan sebagian besar pekerjaan di browser menggunakan Virtual DOM, SvelteKit melakukan proses kompilasi pada tahap build time.
+SvelteKit adalah framework untuk membangun aplikasi web modern yang dibangun di atas library Svelte. Berbeda dengan framework tradisional seperti React atau Vue yang melakukan sebagian besar pekerjaan di browser menggunakan Virtual DOM, SvelteKit melakukan proses kompilasi pada tahap build time.
 
 Pendekatan ini mengubah komponen deklaratif menjadi kode JavaScript imperatif yang sangat efisien yang secara langsung memanipulasi DOM. Hasilnya adalah performa yang sangat ringan dan cepat, memungkinkan admin toko memuat halaman laporan penjualan yang padat data dan memantau stok barang tanpa lag.
 
@@ -23,11 +23,11 @@ Dalam proyek ini, SvelteKit digunakan untuk membangun Dashboard Admin Web. Keung
 
 ### 2.1.3 Flutter & Dart
 
-Flutter adalah Software Development Kit (SDK) antarmuka pengguna (UI) open-source yang dikembangkan oleh Google untuk membangun aplikasi yang dikompilasi secara native (asli) untuk seluler (Android), web, dan desktop dari satu basis kode tunggal. Flutter menggunakan bahasa pemrograman Dart yang dioptimalkan untuk klien yang cepat dan produktif.
+Flutter adalah Software Development Kit (SDK) UI open-source yang dikembangkan oleh Google untuk membangun aplikasi yang dikompilasi secara native untuk seluler (Android), web, dan desktop dari satu basis kode tunggal. Flutter menggunakan bahasa pemrograman Dart yang dioptimalkan untuk klien yang cepat dan produktif.
 
 Konsep inti Flutter adalah widget, di mana setiap elemen tampilan adalah widget yang dapat dikustomisasi. Flutter menyediakan widget Material Design dan Cupertino yang memungkinkan pengembangan aplikasi dengan tampilan native untuk Android dan iOS secara bersamaan.
 
-Dalam penelitian ini, Flutter digunakan untuk membangun dua aplikasi mobile: Aplikasi Customer dan Aplikasi Kurir. Kemampuan multiplatform Flutter memastikan aplikasi dapat berjalan mulus di berbagai perangkat smartphone dengan performa tinggi (60fps), yang sangat krusial untuk fitur peta interaktif menggunakan OpenStreetMap dan pemindaian QR Code yang lancar.
+Dalam penelitian ini, Flutter digunakan untuk membangun dua aplikasi mobile: Aplikasi Customer dan Aplikasi Kurir. Kemampuan multiplatform Flutter memastikan aplikasi dapat berjalan mulus di berbagai perangkat, yang sangat krusial untuk fitur peta interaktif menggunakan OpenStreetMap.
 
 ## 2.2 Manajemen Basis Data
 
@@ -62,9 +62,9 @@ Rumus dasar ROP yang diterapkan dalam sistem ini adalah:
 **ROP = (Lead Time × Rata-rata Penjualan Harian) + Safety Stock**
 
 Keterangan:
-- **Lead Time**: Waktu yang diperlukan dari pemesanan hingga barang diterima (dalam hari)
-- **Rata-rata Penjualan Harian**: Jumlah unit terjual per hari rata-rata
-- **Safety Stock**: Jumlah stok pengaman untuk menghadapi ketidakpastian permintaan
+- Lead Time: Waktu yang diperlukan dari pemesanan hingga barang diterima (dalam hari)
+- Rata-rata Penjualan Harian: Jumlah unit terjual per hari rata-rata
+- Safety Stock: Jumlah stok pengaman untuk menghadapi ketidakpastian permintaan
 
 Penerapan algoritma ROP pada backend NestJS memungkinkan sistem memberikan notifikasi otomatis kepada admin ketika stok suatu barang menyentuh angka kritis. Dengan demikian, manajemen stok menjadi lebih cerdas dan efisien karena owner dapat melakukan reorder tepat waktu sebelum stok benar-benar habis.
 
@@ -108,29 +108,28 @@ Sistem informasi modern memerlukan integrasi dengan berbagai layanan eksternal d
 Arsitektur Client-Server adalah model komputasi terdistribusi yang membagi tugas antara penyedia sumber daya (Server) dan peminta layanan (Client). Dalam model ini, komunikasi dilakukan melalui jaringan komputer di mana klien mengirimkan permintaan (request) dan server memproses serta mengirimkan balasan (response).
 
 Keuntungan arsitektur Client-Server meliputi:
-- **Skalabilitas**: Server dapat ditingkatkan kapasitasnya sesuai kebutuhan
-- **Maintenance Terpusat**: Perubahan dan pembaruan dapat dilakukan di sisi server
-- **Keamanan**: Data tersimpan terpusat dengan kontrol akses yang ketat
-- **Resource Sharing**: Multiple clients dapat mengakses resource yang sama secara bersamaan
+- Skalabilitas: Server dapat ditingkatkan kapasitasnya sesuai kebutuhan
+- Maintenance Terpusat: Perubahan dan pembaruan dapat dilakukan di sisi server
+- Keamanan: Data tersimpan terpusat dengan kontrol akses yang ketat
+- Resource Sharing: Multiple clients dapat mengakses resource yang sama secara bersamaan
 
 Dalam penelitian ini, arsitektur Client-Server menjadi fondasi utama topologi sistem. Aplikasi Mobile (Flutter) dan Web Dashboard (SvelteKit) bertindak sebagai sisi Client yang berada di lokasi fisik berbeda-beda (terdistribusi). Sementara itu, Server (NestJS) bertindak sebagai pusat pemrosesan logika bisnis dan basis data yang melayani permintaan dari banyak klien secara bersamaan.
 
 Dengan arsitektur ini, sinkronisasi data logistik antara kurir di lapangan dan admin di toko dapat dilakukan secara real-time. Klien tidak saling berkomunikasi secara langsung, melainkan terhubung ke satu titik pusat yaitu NestJS Server yang mengelola seluruh logika bisnis dan interaksi dengan database.
 
-### 2.4.2 WebSocket & Komunikasi Real-time
+### 2.4.2 WebSocket
 
 WebSocket adalah protokol komunikasi komputer yang menyediakan saluran komunikasi dua arah (full-duplex) melalui koneksi TCP tunggal. Berbeda dengan model HTTP tradisional yang bersifat request-response, WebSocket memungkinkan server untuk mengirim data ke client tanpa adanya request terlebih dahulu.
 
 Keunggulan WebSocket dibandingkan HTTP polling adalah:
-- **Latency Rendah**: Data dapat langsung dikirim tanpa delay
-- **Efisiensi Resource**: Tidak perlu membuat koneksi baru untuk setiap komunikasi
-- **Full-duplex**: Komunikasi dua arah secara bersamaan
-- **Persistent Connection**: Koneksi tetap terbuka selama session
+- Latency Rendah: Data dapat langsung dikirim tanpa delay
+- Efisiensi Resource: Tidak perlu membuat koneksi baru untuk setiap komunikasi
+- Full-duplex: Komunikasi dua arah secara bersamaan
+- Persistent Connection: Koneksi tetap terbuka selama session
 
 Dalam penelitian ini, protokol WebSocket digunakan untuk menangani dua kebutuhan utama secara single connection:
-
-1. **Live Tracking**: Mengirim koordinat GPS kurir ke server secara periodik untuk dipantau posisinya oleh admin melalui dashboard
-2. **In-App Notification**: Mengirim peringatan pesanan baru kepada kurir secara instan tanpa perlu refresh halaman
+1. Live Tracking: Mengirim koordinat GPS kurir ke server secara periodik untuk dipantau posisinya oleh admin melalui dashboard
+2. In-App Notification: Mengirim peringatan pesanan baru kepada kurir secara instan tanpa perlu refresh halaman
 
 Implementasi WebSocket pada sisi server menggunakan library Socket.io yang terintegrasi dengan NestJS. Library ini menangani automatic reconnection dan fallback mechanism jika browser tidak mendukung WebSocket natively. Di sisi client, Flutter menggunakan library web_socket_channel untuk establish koneksi WebSocket.
 
@@ -143,10 +142,10 @@ Payment Gateway adalah layanan perantara yang mengotorisasi pemrosesan pembayara
 Midtrans adalah payment gateway yang populer di Indonesia dan telah terintegrasi dengan berbagai metode pembayaran seperti Virtual Account, QRIS, E-Wallet, dan transfer bank. Midtrans menyediakan API yang mudah diintegrasikan dengan sistem dan mendukung proses verifikasi otomatis melalui webhook.
 
 Fitur utama Midtrans yang diintegrasikan dalam sistem meliputi:
-- **Multiple Payment Methods**: Mendukung berbagai metode pembayaran populer di Indonesia
-- **Automatic Notification**: Webhook untuk verifikasi status pembayaran secara real-time
-- **Transaction Reporting**: Laporan transaksi lengkap untuk admin
-- **Secure Transaction**: Standar keamanan PCI-DSS compliant
+- Multiple Payment Methods: Mendukung berbagai metode pembayaran populer di Indonesia
+- Automatic Notification: Webhook untuk verifikasi status pembayaran secara real-time
+- Transaction Reporting: Laporan transaksi lengkap untuk admin
+- Secure Transaction: Standar keamanan PCI-DSS compliant
 
 Sistem ini memanfaatkan fitur Webhook (HTTP Notification) dari Midtrans. Ketika pelanggan berhasil melakukan pembayaran, Midtrans akan mengirimkan sinyal ke backend NestJS secara real-time untuk memperbarui status pesanan menjadi "Dibayar" tanpa memerlukan verifikasi manual dari admin toko.
 
@@ -156,9 +155,9 @@ Location-Based Service (LBS) adalah layanan informasi yang dapat diakses melalui
 
 Dalam konteks penelitian ini, sistem tidak menggunakan layanan berbayar Google Maps Platform. Sebagai penggantinya, sistem memanfaatkan:
 
-1. **OpenStreetMap (OSM)**: Sebagai peta dasar (basemap) untuk visualisasi lokasi. OSM adalah proyek open source yang menyediakan data peta dunia yang dapat digunakan secara gratis.
+1. OpenStreetMap (OSM): Sebagai peta dasar (basemap) untuk visualisasi lokasi. OSM adalah proyek open source yang menyediakan data peta dunia yang dapat digunakan secara gratis.
 
-2. **OpenRouteService (ORS) API**: Untuk fitur perhitungan rute (routing) dan matriks jarak (Distance Matrix) yang diperlukan dalam algoritma optimasi pengiriman.
+2. OpenRouteService (ORS) API: Untuk fitur perhitungan rute (routing) dan matriks jarak (Distance Matrix) yang diperlukan dalam algoritma optimasi pengiriman.
 
 Teori LBS menjadi landasan ilmiah bagi fitur pelacakan armada (fleet tracking) dalam aplikasi. Sistem tidak hanya sekadar menampilkan peta, tetapi melakukan pengolahan data spasial secara terdistribusi. Posisi kurir (Latitude/Longitude) dikirimkan secara periodik melalui jaringan data seluler ke server, yang kemudian didistribusikan kembali ke dashboard admin untuk memberikan visualisasi pergerakan armada secara akurat.
 
@@ -181,18 +180,18 @@ Canvas API menyediakan kemampuan untuk menggambar grafik dan gambar secara progr
 
 ### 2.4.6 Aplikasi Pembanding (Lalamove)
 
-Lalamove adalah platform pengiriman on-demand yang menjadi pemimpin pasar dalam layanan logistik urbain. Platform ini menghubungkan bisnis dengan pengemudi pengantaran terdekat secara real-time. Untuk mengevaluasi keunggulan dan kelemahan sistem yang dikembangkan, dilakukan perbandingan fitur seperti terlihat pada Tabel 1.
+Lalamove adalah platform pengiriman on-demand yang menjadi pemimpin pasar dalam layanan logistik urban. Platform ini menghubungkan bisnis dengan pengemudi pengantaran terdekat secara real-time. Untuk mengevaluasi keunggulan dan kelemahan sistem yang dikembangkan, dilakukan perbandingan fitur seperti terlihat pada Tabel 1.
 
 **Tabel 1. Tabel Perbandingan Fitur Sistem dengan Lalamove**
 
-| Fitur                                           | Lalamove | Sistem Yang Dikembangkan |
-|-------------------------------------------------|:--------:|:------------------------:|
-| Pelacakan Lokasi Real-time                      |     ✓    |            ✓             |
-| Optimasi Rute Multi-stop                        |     ✓    |            ✓             |
-| Bukti Pengiriman (Foto & Tanda Tangan)          |     ✓    |            ✓             |
-| Jangkauan Area Layanan Nasional                 |     ✓    |            ✗             |
-| Ketersediaan Driver 24 Jam                      |     ✓    |            ✗             |
-| Integrasi Otomatis dengan Stok                  |     ✗    |            ✓             |
+| Fitur                                      | Lalamove | Sistem Yang Dikembangkan |
+|-------------------------------------------|:--------:|:------------------------:|
+| Pelacakan Lokasi Real-time                 |     ✓    |            ✓             |
+| Optimasi Rute Multi-stop                   |     ✓    |            ✓             |
+| Bukti Pengiriman (Foto & Tanda Tangan)    |     ✓    |            ✓             |
+| Jangkauan Area Layanan Nasional            |     ✓    |            ✗             |
+| Ketersediaan Driver 24 Jam                 |     ✓    |            ✗             |
+| Integrasi Otomatis dengan Stok             |     ✗    |            ✓             |
 
 Berdasarkan Tabel 1, sistem yang dibangun memiliki standar fitur operasional yang setara dengan Lalamove dalam hal pelacakan lokasi real-time, optimasi rute multi-stop, serta validasi bukti pengiriman digital. Hal ini menunjukkan bahwa secara teknis, sistem mampu menangani kebutuhan pengiriman barang dengan standar industri logistik modern.
 
@@ -208,16 +207,16 @@ Tujuan utama UAT adalah memvalidasi apakah alur sistem sudah sesuai dengan kebut
 
 Metodologi UAT dalam penelitian ini mencakup:
 
-1. **Persiapan**: Menetapkan skenario uji coba yang mencakup alur lengkap dari pemesanan hingga penyelesaian pengiriman. Skenario ini dirancang berdasarkan use case diagram dan activity diagram yang telah dirancang sebelumnya.
+1. Persiapan: Menetapkan skenario uji coba yang mencakup alur lengkap dari pemesanan hingga penyelesaian pengiriman. Skenario ini dirancang berdasarkan use case diagram dan activity diagram yang telah dirancang sebelumnya.
 
-2. **Pelaksanaan**: Pengujian melibatkan partisipan yang mencakup Admin Toko, Kurir armada internal, dan Pelanggan sukarelawan. Target responden adalah minimal 1 orang Admin, 3 orang Kurir, dan 25 orang Pelanggan.
+2. Pelaksanaan: Pengujian melibatkan partisipan yang mencakup Admin Toko, Kurir armada internal, dan Pelanggan sukarelawan. Target responden adalah minimal 1 orang Admin, 3 orang Kurir, dan 25 orang Pelanggan.
 
-3. **Evaluasi**: Partisipan diminta untuk menyelesaikan skenario operasional nyata dan memberikan penilaian melalui kuesioner skala Likert yang disebarkan menggunakan Google Form. Data yang diperoleh kemudian dianalisis untuk mengukur efektivitas sistem.
+3. Evaluasi: Partisipan diminta untuk menyelesaikan skenario operasional nyata dan memberikan penilaian melalui kuesioner skala Likert yang disebarkan menggunakan Google Form. Data yang diperoleh kemudian dianalisis untuk mengukur efektivitas sistem.
 
 Aspek yang diukur dalam UAT meliputi:
-- **Kegunaan Antarmuka**: Seberapa mudah pengguna dapat menavigasi dan menggunakan fitur-fitur sistem
-- **Fungsionalitas**: Apakah semua fitur bekerja sesuai dengan harapan
-- **Performa**: Kecepatan respons sistem dalam kondisi operasional normal
-- **Kepuasan Pengguna**: Tingkat kepuasan keseluruhan terhadap sistem
+- Kegunaan Antarmuka: Seberapa mudah pengguna dapat menavigasi dan menggunakan fitur-fitur sistem
+- Fungsionalitas: Apakah semua fitur bekerja sesuai dengan harapan
+- Performa: Kecepatan respons sistem dalam kondisi operasional normal
+- Kepuasan Pengguna: Tingkat kepuasan keseluruhan terhadap sistem
 
 Hasil pengujian UAT dievaluasi untuk memastikan bahwa fitur-fitur kompleks seperti pelacakan lokasi real-time dan tanda tangan digital dapat diterima dan dioperasikan dengan baik oleh pengguna target. Temuan dari UAT akan digunakan untuk memperbaiki aspek-aspek yang dianggap kurang intuitif atau problematic sebelum sistem diluncurkan secara resmi.
