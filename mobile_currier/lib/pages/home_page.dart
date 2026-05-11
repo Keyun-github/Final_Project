@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 import 'order_detail_page.dart';
@@ -24,11 +26,73 @@ class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   List<OrderModel> orders = [];
   bool _isLoading = true;
+  Timer? _locationTimer;
+  Position? _currentPosition;
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
+    _initLocationTracking();
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initLocationTracking() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      debugPrint('[_initLocationTracking] Location services disabled');
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debugPrint('[_initLocationTracking] Location permission denied');
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint('[_initLocationTracking] Location permission permanently denied');
+      return;
+    }
+
+    _locationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _sendLocationUpdate();
+    });
+
+    _sendLocationUpdate();
+  }
+
+  Future<void> _sendLocationUpdate() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+
+      _currentPosition = position;
+
+      await ApiService.updateDriverLocation(
+        driverId: widget.driverId,
+        lat: position.latitude,
+        lng: position.longitude,
+      );
+
+      debugPrint(
+        '[HomePage] Location updated: ${position.latitude}, ${position.longitude}',
+      );
+    } catch (e) {
+      debugPrint('[HomePage] Failed to get/send location: $e');
+    }
   }
 
   Future<void> _loadOrders() async {

@@ -100,9 +100,20 @@ export interface Employee {
     name: string;
     phone: string;
     isActive: boolean;
+    isAvailable?: boolean;
+    currentLat?: number | null;
+    currentLng?: number | null;
+    vehicleType?: string;
+    vehicleBrand?: string;
+    vehiclePlate?: string;
+    vehicleColor?: string;
 }
 
 export async function fetchEmployees(): Promise<Employee[]> {
+    return request('/drivers');
+}
+
+export async function fetchAvailableDrivers(): Promise<Employee[]> {
     return request('/drivers');
 }
 

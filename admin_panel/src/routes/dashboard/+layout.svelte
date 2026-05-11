@@ -330,7 +330,7 @@
         gap: 12px;
         padding: 12px 16px;
         border-radius: var(--radius-md);
-        color: var(--color-text-muted);
+        color: #9999b3;
         background: transparent;
         font-size: 0.9rem;
         font-weight: 500;
@@ -339,13 +339,27 @@
     }
 
     .nav-item:hover {
-        background: rgba(108, 99, 255, 0.06);
-        color: var(--color-text);
+        background: rgba(108, 99, 255, 0.15);
+        color: #ffffff;
     }
 
     .nav-item.active {
-        background: rgba(108, 99, 255, 0.1);
-        color: var(--color-primary);
+        background: rgba(108, 99, 255, 0.25);
+        color: #ffffff;
+        font-weight: 600;
+    }
+
+    .nav-item.active .nav-icon {
+        color: #ffffff;
+    }
+
+    .nav-item .nav-icon {
+        color: #8888a8;
+        transition: color var(--transition-fast);
+    }
+
+    .nav-item:hover .nav-icon {
+        color: #ffffff;
     }
 
     .nav-icon {

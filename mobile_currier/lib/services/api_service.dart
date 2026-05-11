@@ -188,4 +188,27 @@ class ApiService {
       return false;
     }
   }
+
+  static Future<bool> updateDriverLocation({
+    required int driverId,
+    required double lat,
+    required double lng,
+  }) async {
+    try {
+      debugPrint('[ApiService] updateDriverLocation: driverId=$driverId, lat=$lat, lng=$lng');
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/drivers/$driverId/location'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'lat': lat, 'lng': lng}),
+      );
+
+      debugPrint('[ApiService] updateDriverLocation response: ${response.statusCode}');
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService] updateDriverLocation error: $e');
+      return false;
+    }
+  }
 }

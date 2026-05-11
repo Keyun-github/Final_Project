@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slide 07 - Courier App Features</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6c63ff;
+            --secondary: #4ecdc4;
+            --dark: #1a1a2e;
+            --light: #f5f6fa;
+            --white: #ffffff;
+            --text: #1a1a2e;
+            --text-muted: #6b6b8a;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--light);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .slide {
+            width: 1280px;
+            height: 720px;
+            background: var(--light);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .gradient-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        .header {
+            padding: 40px 60px 30px;
+        }
+        
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--dark);
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            padding: 0 60px;
+        }
+        
+        .feature-card {
+            background: var(--white);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(108,99,255,0.15);
+        }
+        
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-bottom: 14px;
+        }
+        
+        .feature-card h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 6px;
+        }
+        
+        .feature-card p {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+        
+        .slide-number {
+            position: absolute;
+            bottom: 30px;
+            right: 60px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="slide">
+        <div class="gradient-bar"></div>
+        
+        <div class="header">
+            <span class="section-label">Courier App</span>
+            <h1>Courier App Features</h1>
+        </div>
+        
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🔐</div>
+                <h3>Login</h3>
+                <p>Authentication kurir</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">📋</div>
+                <h3>Daftar Tugas</h3>
+                <p>Assigned & pending tasks</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">📄</div>
+                <h3>Detail Pesanan</h3>
+                <p>Data pelanggan, alamat, item</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">✅</div>
+                <h3>Accept/Reject</h3>
+                <p>Terima atau tolak pesanan</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🔄</div>
+                <h3>Update Status</h3>
+                <p>PickingUp → Delivered</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">📍</div>
+                <h3>GPS Sharing</h3>
+                <p>Kirim lokasi periodik</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">🗺️</div>
+                <h3>Peta Navigasi</h3>
+                <p>Lokasi pickup & delivery</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">📷</div>
+                <h3>Photo Proof</h3>
+                <p>Upload foto bukti pengiriman</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">📜</div>
+                <h3>History</h3>
+                <p>Riwayat pengiriman selesai</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">👤</div>
+                <h3>Profile</h3>
+                <p>Info profil & kendaraan</p>
+            </div>
+        </div>
+        
+        <span class="slide-number">07 / 10</span>
+    </div>
+</body>
+</html>

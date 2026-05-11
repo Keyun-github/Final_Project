@@ -182,6 +182,9 @@ Canvas API menyediakan kemampuan untuk menggambar grafik dan gambar secara progr
 
 Lalamove adalah platform pengiriman on-demand yang menjadi pemimpin pasar dalam layanan logistik urban. Platform ini menghubungkan bisnis dengan pengemudi pengantaran terdekat secara real-time. Untuk mengevaluasi keunggulan dan kelemahan sistem yang dikembangkan, dilakukan perbandingan fitur seperti terlihat pada Tabel 1.
 
+> **[Gambar 2.1 Tabel Perbandingan Fitur Sistem dengan Lalamove]**
+> *Letakkan Tabel 1 di sini untuk menunjukkan perbandingan fitur antara sistem yang dikembangkan dengan Lalamove*
+
 **Tabel 1. Tabel Perbandingan Fitur Sistem dengan Lalamove**
 
 | Fitur                                      | Lalamove | Sistem Yang Dikembangkan |

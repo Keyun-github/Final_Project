@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to find nearest orders and for auto-dispatch system</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>We need your location to find nearest orders and for auto-dispatch system</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to find nearest orders and for auto-dispatch system</string>
 </dict>
 </plist>

@@ -9,9 +9,7 @@ Kendala operasional yang krusial meliputi pencatatan stok yang tidak real-time, 
 
 Sebagai solusi, penelitian ini mengusulkan pengembangan sistem informasi E-Commerce dan manajemen inventori berbasis multiplatform. Sistem ini menyatukan proses penjualan, pemantauan stok, dan pengiriman dalam satu pintu. Keunggulan utamanya terletak pada integrasi data real-time antara aplikasi admin dan kurir, serta penerapan algoritma Reorder Point (ROP) untuk memberikan rekomendasi waktu pemesanan ulang barang secara akurat.
 
-Selain masalah jadwal, kendala operasional lainnya adalah ketidakefisienan rute pengiriman. Saat ini, penentuan urutan pengiriman paket sepenuhnya bergantung pada intuisi kurir tanpa adanya sistem yang mengelompokkan area tujuan secara otomatis. Hal ini seringkali menyebabkan kurir menempuh jarak yang lebih jauh dari yang seharusnya (rute zigzag), yang berdampak pada pemborosan bahan bakar dan keterlambatan waktu sampai ke pelanggan. Oleh karena itu, diperlukan implementasi algoritma optimasi rute untuk membantu kurir menentukan urutan pengiriman yang paling efisien.
-
-Berdasarkan uraian tersebut, penulis tertarik untuk mengembangkan sebuah sistem informasi E-Commerce dan manajemen distribusi barang terintegrasi berbasis multiplatform menggunakan framework NestJS, SvelteKit, dan Flutter. Sistem ini diharapkan dapat mengatasi berbagai permasalahan tersebut dan memberikan solusi nyata bagi toko modern dalam mengelola operasional bisnisnya secara lebih efisien.
+Selain masalah jadwal, kendala operasional lainnya adalah ketidakefisienan rute pengiriman. Berdasarkan uraian tersebut, penulis tertarik untuk mengembangkan sebuah sistem informasi E-Commerce dan manajemen distribusi barang terintegrasi berbasis multiplatform menggunakan framework NestJS, SvelteKit, dan Flutter. Sistem ini diharapkan dapat mengatasi berbagai permasalahan tersebut dan memberikan solusi nyata bagi toko modern dalam mengelola operasional bisnisnya secara lebih efisien.
 
 ## 1.2 Perumusan Masalah
 
@@ -55,8 +53,6 @@ Modul ini dikembangkan menggunakan Flutter untuk memberikan pengalaman belanja y
 
 Modul ini dikembangkan menggunakan Flutter dengan fokus pada operasional lapangan dan validasi data lokasi. Fitur-fitur utama meliputi manajemen tugas pengiriman, navigasi dan live location, serta bukti pengiriman digital.
 
-Seluruh logika bisnis utama, termasuk perhitungan algoritma Reorder Point (ROP), manajemen transaksi, dan pengaturan jadwal logistik, dipusatkan pada sisi server yang dibangun menggunakan framework NestJS. Komunikasi data antara klien dan server difasilitasi melalui protokol HTTP menggunakan format pertukaran data JSON serta protokol WebSocket untuk komunikasi real-time.
-
 ### 1.4.2 Batasan Sistem
 
 Untuk memastikan pengembangan sistem tetap terarah dan sesuai dengan rancangan arsitektur yang telah ditetapkan, penulis menetapkan batasan-batasan sebagai berikut:
@@ -77,20 +73,23 @@ Untuk memastikan pengembangan sistem tetap terarah dan sesuai dengan rancangan a
 
 Sistematika pembahasan dalam buku tugas akhir ini disusun agar pembaca dapat memahami alur penelitian dan implementasi sistem secara sistematis. Berikut adalah struktur penulisan yang digunakan:
 
-**BAB I PENDAHULUAN**  
+- **BAB I : PENDAHULUAN**
 Bab ini berisi uraian mengenai latar belakang pemilihan judul, perumusan masalah, tujuan penelitian, ruang lingkup dan batasan sistem, serta sistematika pembahasan.
 
-**BAB II TEORI PENUNJANG**  
+- **BAB II : TEORI PENUNJANG**
 Bab ini membahas teori-teori yang mendasari penelitian, meliputi penjelasan mengenai aplikasi pembanding (Lalamove), framework dan bahasa pemrograman (NestJS, SvelteKit, Flutter & Dart), manajemen basis data (PostgreSQL dan Prisma ORM), konsep algoritma dan logika sistem (Reorder Point, Nearest Neighbor, Auto-dispatch), layanan dan protokol terintegrasi (Arsitektur Client-Server, WebSocket, Payment Gateway, LBS, Digital Signature), serta pengujian perangkat lunak (UAT).
 
-**BAB III PERANCANGAN SISTEM**  
+- **BAB III : ANALISIS MASALAH**
+Bab ini menjelaskan identifikasi dan analisis masalah yang dihadapi toko modern dalam mengelola operasional bisnisnya, meliputi studi kasus, gap analysis, dan perumusan kebutuhan sistem.
+
+- **BAB IV : DESIGN SISTEM**
 Bab ini menjelaskan tahap perancangan sistem secara menyeluruh, meliputi arsitektur sistem, perancangan alur sistem (Use Case Diagram dan Activity Diagram), perancangan basis data, serta rancangan fitur sistem untuk ketiga modul (Web Admin, Mobile Customer, dan Mobile Kurir).
 
-**BAB IV IMPLEMENTASI SISTEM**  
+- **BAB V : IMPLEMENTASI**
 Bab ini memuat detail implementasi sistem, meliputi lingkungan implementasi, implementasi antarmuka dan fungsionalitas untuk masing-masing modul, serta implementasi algoritma dan komunikasi jaringan.
 
-**BAB V PENGUJIAN DAN EVALUASI SISTEM**  
+- **BAB VI : UJI COBA**
 Bab ini mencakup skenario uji coba, pengujian fungsionalitas (Functionality Testing), pengujian penerimaan pengguna (User Acceptance Testing), serta evaluasi dan analisis sistem.
 
-**BAB VI KESIMPULAN DAN SARAN**  
+- **BAB VII : PENUTUP**
 Bab ini berisi kesimpulan dari seluruh proses penelitian dan implementasi sistem, serta saran-saran untuk pengembangan lebih lanjut.

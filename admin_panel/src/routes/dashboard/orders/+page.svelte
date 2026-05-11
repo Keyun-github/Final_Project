@@ -1,8 +1,16 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
     import { fetchOrders } from "$lib/api";
+    import {
+        exportMonthlyOrdersPDF,
+        calculateMonthlyStats,
+        filterOrdersByMonth,
+        parseOrderForExport,
+        type OrderForExport,
+    } from "$lib/pdfExport";
 
     let orders = $state<any[]>([]);
+    let rawOrders = $state<any[]>([]);
     let isLoading = $state(true);
     let selectedOrder: any = $state(null);
     let showDetailModal = $state(false);
@@ -10,9 +18,42 @@
     let photoUrl = $state('');
     let pollInterval: any = $state(null);
 
+    let selectedStartDate = $state(getDefaultStartDate());
+    let selectedEndDate = $state(getDefaultEndDate());
+
+    function getDefaultStartDate(): string {
+        const date = new Date();
+        date.setDate(date.getDate() - 7);
+        return date.toISOString().split('T')[0];
+    }
+
+    function getDefaultEndDate(): string {
+        return new Date().toISOString().split('T')[0];
+    }
+
+    function formatDateIndonesia(dateStr: string): string {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+    }
+
+    function getDateDifference(): number {
+        const start = new Date(selectedStartDate);
+        const end = new Date(selectedEndDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays === 0 ? 1 : diffDays;
+    }
+
+    function isValidRange(): boolean {
+        return getDateDifference() <= 30;
+    }
+
     onMount(async () => {
         await loadOrders();
-        // Start polling every 30 seconds for real-time updates
         pollInterval = setInterval(() => {
             loadOrders();
         }, 30000);
@@ -28,9 +69,9 @@
         try {
             isLoading = true;
             const data = await fetchOrders();
-            // Debug: log first order to check deliveryPhoto field
             console.log('API Response - First order:', data[0]);
             console.log('deliveryPhoto field:', data[0]?.deliveryPhoto);
+            rawOrders = data;
             orders = data.map((o: any) => ({
                 id: `#ORD-${String(o.id).padStart(3, "0")}`,
                 rawId: o.id,
@@ -44,7 +85,9 @@
                     hour: "2-digit",
                     minute: "2-digit",
                 }),
-                total: formatRupiah(Number(o.totalAmount)),
+                createdAt: new Date(o.createdAt),
+                total: Number(o.totalAmount),
+                totalFormatted: formatRupiah(Number(o.totalAmount)),
                 status: mapStatus(o.status),
                 rawStatus: o.status,
                 paymentMethod: o.paymentMethod || "COD",
@@ -135,12 +178,20 @@
         photoUrl = '';
     }
 
-    function printOrder() {
+function printOrder() {
         const printContent = document.getElementById("print-area");
         if (!printContent || !selectedOrder) return;
 
+        const deliveryFee = 10000;
+        const subtotal = selectedOrder.items.reduce((sum: number, item: any) => sum + (item.subtotal || 0), 0);
+        const totalAmount = subtotal + deliveryFee;
+
         const printWindow = window.open("", "_blank");
         if (!printWindow) return;
+
+        function formatRupiahPrint(val: number): string {
+            return "Rp " + val.toLocaleString("id-ID");
+        }
 
         printWindow.document.write(`
             <!DOCTYPE html>
@@ -215,9 +266,17 @@
                         `).join("")}
                     </tbody>
                     <tfoot>
+                        <tr>
+                            <td colspan="4"><strong>Subtotal</strong></td>
+                            <td class="text-right"><strong>${formatRupiahPrint(subtotal)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4">Biaya Pengiriman</td>
+                            <td class="text-right">${formatRupiahPrint(deliveryFee)}</td>
+                        </tr>
                         <tr class="total-row">
                             <td colspan="4"><strong>Total</strong></td>
-                            <td class="text-right"><strong>${selectedOrder.total}</strong></td>
+                            <td class="text-right"><strong>${formatRupiahPrint(totalAmount)}</strong></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -231,7 +290,91 @@
         printWindow.document.close();
         printWindow.print();
     }
+
+    function loadOrdersByDateRange() {
+        const filteredOrders = orders.filter((order) => {
+            const orderDate = new Date(order.createdAt);
+            const startDate = new Date(selectedStartDate);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(selectedEndDate);
+            endDate.setHours(23, 59, 59, 999);
+            return orderDate >= startDate && orderDate <= endDate;
+        });
+        return filteredOrders;
+    }
+
+    function exportPDF() {
+        if (!isValidRange()) {
+            alert('Range tanggal tidak valid. Maksimum range adalah 30 hari.');
+            return;
+        }
+
+        const filteredOrders = loadOrdersByDateRange();
+
+        if (filteredOrders.length === 0) {
+            alert(`Tidak ada pesanan untuk range tanggal ${formatDateIndonesia(selectedStartDate)} - ${formatDateIndonesia(selectedEndDate)}`);
+            return;
+        }
+
+        const ordersForExport: OrderForExport[] = filteredOrders.map((o) => ({
+            id: o.id,
+            rawId: o.rawId,
+            customer: o.customer,
+            phone: o.phone,
+            address: o.address,
+            date: o.date,
+            createdAt: o.createdAt,
+            total: o.total,
+            totalFormatted: o.totalFormatted,
+            status: o.status,
+            rawStatus: o.rawStatus,
+            paymentMethod: o.paymentMethod,
+            deliveryPhoto: o.deliveryPhoto,
+            items: o.items,
+        }));
+
+        const stats = calculateMonthlyStats(ordersForExport);
+        const dateRangeLabel = `${formatDateIndonesia(selectedStartDate)} - ${formatDateIndonesia(selectedEndDate)}`;
+
+        exportMonthlyOrdersPDF(ordersForExport, dateRangeLabel, '', stats);
+    }
+
+    function filteredOrderCount(): number {
+        return loadOrdersByDateRange().length;
+    }
 </script>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <label class="filter-label">Tanggal Mulai</label>
+        <input
+            type="date"
+            class="filter-date-input"
+            bind:value={selectedStartDate}
+            max={selectedEndDate}
+        />
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Tanggal Akhir</label>
+        <input
+            type="date"
+            class="filter-date-input"
+            bind:value={selectedEndDate}
+            min={selectedStartDate}
+            max={new Date().toISOString().split('T')[0]}
+        />
+    </div>
+    <div class="filter-group date-range-info">
+        <span class="range-label">
+            {#if isValidRange()}
+                <span class="range-valid">Range: {getDateDifference()} hari</span>
+            {:else}
+                <span class="range-invalid">Maks 30 hari</span>
+            {/if}
+        </span>
+    </div>
+</div>
 
 <!-- Action Bar -->
 <div class="action-bar">
@@ -248,6 +391,23 @@
             <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
         </svg>
         Refresh
+    </button>
+    <button class="btn-export" onclick={exportPDF} title="Export to PDF">
+        <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+        >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="12"/>
+            <line x1="15" y1="15" x2="12" y2="12"/>
+        </svg>
+        Export PDF ({filteredOrderCount()} orders)
     </button>
 </div>
 
@@ -585,7 +745,7 @@
         gap: 8px;
         padding: 10px 18px;
         background: white;
-        color: var(--color-text);
+        color: #000;
         font-size: 0.85rem;
         font-weight: 600;
         border-radius: var(--radius-md);
@@ -855,5 +1015,129 @@
         max-width: 100%;
         max-height: 500px;
         object-fit: contain;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+        padding: 16px 20px;
+        background: var(--color-bg-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .filter-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-text-muted);
+    }
+
+    .filter-date-input {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #000;
+        background: white;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        min-width: 160px;
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .filter-date-input::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        filter: invert(0%);
+    }
+
+    .filter-date-input:hover {
+        border-color: var(--color-primary);
+    }
+
+    .filter-date-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+    }
+
+    .date-range-info {
+        justify-content: center;
+    }
+
+    .range-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 10px 0;
+    }
+
+    .range-valid {
+        color: var(--color-success);
+    }
+
+    .range-invalid {
+        color: var(--color-danger);
+    }
+
+    .filter-select {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--color-text);
+        background: white;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        min-width: 140px;
+    }
+
+    .filter-select:hover {
+        border-color: var(--color-primary);
+    }
+
+    .filter-select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+    }
+
+    /* Export Button */
+    .btn-export {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        background: var(--color-success);
+        color: white;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-radius: var(--radius-md);
+        border: none;
+        transition: all var(--transition-fast);
+        cursor: pointer;
+    }
+
+    .btn-export:hover {
+        background: #43a047;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+
+    .btn-export:active {
+        transform: translateY(0);
     }
 </style>

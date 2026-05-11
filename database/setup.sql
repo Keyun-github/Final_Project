@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS drivers (
     name VARCHAR(255) NOT NULL,
     phone VARCHAR(50) DEFAULT '',
     "isActive" BOOLEAN DEFAULT true,
+    "isAvailable" BOOLEAN DEFAULT true,
+    "currentLat" DECIMAL(10, 8),
+    "currentLng" DECIMAL(11, 8),
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

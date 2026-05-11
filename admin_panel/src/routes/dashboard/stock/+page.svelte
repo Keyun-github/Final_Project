@@ -94,13 +94,32 @@
     }
 
     function needsReorder(item: any): boolean {
-        // ROP calculation: ROP = (Lead Time × Avg Daily Sales) + Safety Stock
-        // Using Lead Time and Safety Stock from product, Avg Daily Sales = sold / 7 (last 7 days approximation)
         const leadTime = item.leadTime ?? 3;
         const safetyStock = item.safetyStock ?? 5;
-        const avgDailySales = (item.sold ?? 0) / 7;
+        const stock = item.stock ?? 0;
+        const sold = item.sold ?? 0;
+
+        // Note: 'sold' is cumulative lifetime sales, NOT recent 7-day average
+        // For products with high cumulative sales, velocity-based ROP is unreliable
+        // Use simplified threshold based on safetyStock for high-sold products
+
+        if (sold === 0) {
+            // New product with no sales - use safetyStock as threshold
+            return stock <= safetyStock;
+        }
+
+        if (sold < 7) {
+            // Very few sales - use simplified ROP: safetyStock + leadTime
+            const rop = safetyStock + leadTime;
+            return stock <= rop;
+        }
+
+        // For products with significant sales but not extremely high
+        // Use a moderate ROP that doesn't inflate due to cumulative totals
+        // Cap avgDailySales contribution to avoid extreme ROP values
+        const avgDailySales = Math.min(sold / 7, 10); // Cap at 10 units/day for ROP calculation
         const rop = (leadTime * avgDailySales) + safetyStock;
-        return item.stock <= rop;
+        return stock <= rop;
     }
 
     function openModal() {

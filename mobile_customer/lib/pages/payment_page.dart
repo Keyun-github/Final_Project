@@ -32,6 +32,10 @@ class PaymentPage extends StatefulWidget {
 class _PaymentPageState extends State<PaymentPage> {
   String _selectedMethod = 'Midtrans';
   bool _isProcessing = false;
+  final DELIVERY_FEE = 10000;
+
+  String get _totalWithDeliveryFormatted =>
+      'Rp ${(widget.cart.totalPrice + DELIVERY_FEE).toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}';
 
   void _processPayment() async {
     setState(() {
@@ -53,7 +57,7 @@ class _PaymentPageState extends State<PaymentPage> {
         customerName: widget.customerName,
         customerPhone: widget.customerPhone,
         deliveryAddress: widget.customerAddress,
-        totalAmount: widget.cart.totalPrice,
+        totalAmount: widget.cart.totalPrice + DELIVERY_FEE,
         paymentMethod: _selectedMethod,
         items: widget.cart.items
             .map(
@@ -81,7 +85,7 @@ class _PaymentPageState extends State<PaymentPage> {
             customerName: widget.customerName,
             customerAddress: widget.customerAddress,
             paymentMethod: _selectedMethod,
-            totalAmount: widget.cart.formattedTotal,
+            totalAmount: _totalWithDeliveryFormatted,
             deliveryTime: widget.deliveryTime,
             orderId: orderResponse['id'],
           ),
@@ -229,7 +233,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          widget.cart.formattedTotal,
+                          _totalWithDeliveryFormatted,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 32,
