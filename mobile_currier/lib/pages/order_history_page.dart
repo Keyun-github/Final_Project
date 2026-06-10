@@ -57,7 +57,7 @@ class OrderHistoryPage extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => OrderDetailPage(
                           order: order,
-                          onStatusUpdate: (_, __) {},
+                          onStatusUpdate: (_, _) {},
                         ),
                       ),
                     );

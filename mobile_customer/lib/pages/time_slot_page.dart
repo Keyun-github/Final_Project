@@ -13,7 +13,7 @@ class _TimeSlotPageState extends State<TimeSlotPage> {
   String? _selectedTime;
   List<Map<String, dynamic>> _timeSlots = [];
   bool _isLoading = true;
-  bool _isBooking = false;
+  final bool _isBooking = false;
 
   @override
   void initState() {

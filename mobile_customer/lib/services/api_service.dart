@@ -137,6 +137,8 @@ class ApiService {
     required double totalAmount,
     required String paymentMethod,
     required List<Map<String, dynamic>> items,
+    String? deliveryDate,
+    String? deliveryTime,
   }) async {
     final body = {
       'customerName': customerName,
@@ -149,6 +151,14 @@ class ApiService {
 
     if (customerId != null) {
       body['customerId'] = customerId;
+    }
+
+    if (deliveryDate != null) {
+      body['deliveryDate'] = deliveryDate;
+    }
+
+    if (deliveryTime != null) {
+      body['deliveryTime'] = deliveryTime;
     }
 
     final response = await http.post(
@@ -176,6 +186,26 @@ class ApiService {
       return json.decode(response.body);
     }
     return null;
+  }
+
+  static Future<Map<String, String?>> fetchOrderRoutes(int orderId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/orders/$orderId/routes'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'routeToStore': data['routeToStore'] as String?,
+          'routeToDestination': data['routeToDestination'] as String?,
+        };
+      }
+      return {'routeToStore': null, 'routeToDestination': null};
+    } catch (e) {
+      return {'routeToStore': null, 'routeToDestination': null};
+    }
   }
 
   // ===== Time Slots =====
@@ -211,11 +241,32 @@ class ApiService {
         final data = json.decode(response.body);
         return data['success'] ?? false;
       }
+      // Non-201 status means booking failed
       return false;
     } catch (e) {
       print('[ApiService] Error booking time slot: $e');
-      // Return true in demo mode
-      return true;
+      // Return false on error - don't allow order to proceed
+      return false;
+    }
+  }
+
+  static Future<bool> releaseTimeSlot(String date, String time) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/time-slots/release'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'date': date, 'time': time}),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('[ApiService] Error releasing time slot: $e');
+      return false;
     }
   }
 
@@ -248,5 +299,107 @@ class ApiService {
       'maxBookings': 3,
     });
     return slots;
+  }
+
+  // ===== Midtrans Payment =====
+  static Future<Map<String, dynamic>> getSnapToken({
+    required String orderId,
+    required double amount,
+    required String customerName,
+    required String customerEmail,
+    required String customerPhone,
+  }) async {
+    print('[ApiService] getSnapToken called: orderId=$orderId, amount=$amount');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/payment/snap-token'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'orderId': orderId,
+        'amount': amount,
+        'customerName': customerName,
+        'customerEmail': customerEmail,
+        'customerPhone': customerPhone,
+      }),
+    );
+
+    print('[ApiService] getSnapToken response: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+
+    throw Exception('Failed to get snap token: ${response.statusCode}');
+  }
+
+  static Future<Map<String, dynamic>?> checkPaymentStatus(String orderId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/payment/status/$orderId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('[ApiService] checkPaymentStatus error: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> confirmPayment(int? orderId) async {
+    try {
+      if (orderId == null) return null;
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/orders/$orderId/confirm-payment'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      print('[ApiService] confirmPayment response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('[ApiService] confirmPayment error: $e');
+      return null;
+    }
+  }
+
+  // ===== Chat =====
+  static Future<Map<String, dynamic>?> post(String endpoint, Map<String, dynamic> body) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      }
+      return null;
+    } catch (e) {
+      print('[ApiService] POST error: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> get(String endpoint) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl$endpoint'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      print('[ApiService] GET error: $e');
+      return [];
+    }
   }
 }

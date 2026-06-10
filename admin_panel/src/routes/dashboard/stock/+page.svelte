@@ -1,6 +1,13 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { fetchProducts, createProduct, deleteProduct } from "$lib/api";
+    import {
+        initProductsWebSocket,
+        onProductCreated,
+        onProductUpdated,
+        onProductDeleted,
+        disconnectProductsWebSocket,
+    } from "$lib/products_websocket";
 
     // ---- Stock Management ----
     interface Variant {
@@ -31,6 +38,22 @@
     let newImagePreview = $state("");
     let formError = $state("");
 
+    // ---- Toast Notification ----
+    let toastMessage = $state("");
+    let toastType = $state<"success" | "error">("success");
+    let toastVisible = $state(false);
+    let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function showToast(message: string, type: "success" | "error" = "success") {
+        toastMessage = message;
+        toastType = type;
+        toastVisible = true;
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            toastVisible = false;
+        }, 3000);
+    }
+
     import { onDestroy } from "svelte";
 
     const unitOptions = ["KG", "Box", "Sack - 25kg", "Sack - 50kg", "Piece"];
@@ -43,10 +66,17 @@
         refreshInterval = setInterval(() => {
             loadProducts();
         }, 30000);
+        // Initialize WebSocket for real-time updates
+        initProductsWebSocket();
+        onProductCreated(() => loadProducts());
+        onProductUpdated(() => loadProducts());
+        onProductDeleted(() => loadProducts());
     });
 
     onDestroy(() => {
         if (refreshInterval) clearInterval(refreshInterval);
+        if (toastTimer) clearTimeout(toastTimer);
+        disconnectProductsWebSocket();
     });
 
     async function loadProducts() {
@@ -165,17 +195,29 @@
         }
 
         try {
-            await createProduct({
+            const result = await createProduct({
                 name: nameVal,
                 price: Number(priceVal),
                 stock: Number(stockVal),
                 unit: newUnit,
                 image: newImage,
             });
+
+            if (result?.action === "updated") {
+                const newStock = result.product?.stock ?? 0;
+                showToast(
+                    `✅ Stock ditambah & harga diupdate (stok sekarang: ${newStock})`,
+                    "success",
+                );
+            } else {
+                showToast("✅ Produk baru ditambahkan", "success");
+            }
+
             await loadProducts();
             closeModal();
         } catch (e) {
             formError = "Failed to save item. Please try again.";
+            showToast("❌ Gagal menyimpan produk", "error");
         }
     }
 
@@ -484,6 +526,13 @@
                 </div>
             </form>
         </div>
+    </div>
+{/if}
+
+<!-- Toast Notification -->
+{#if toastVisible}
+    <div class="toast toast--{toastType}" role="status" aria-live="polite">
+        {toastMessage}
     </div>
 {/if}
 
@@ -989,6 +1038,44 @@
         }
         .search-bar {
             max-width: 100%;
+        }
+    }
+
+    /* ===== Toast Notification ===== */
+    .toast {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        z-index: 200;
+        padding: 14px 22px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        animation: toastSlide 0.3s ease;
+        max-width: 420px;
+    }
+
+    .toast--success {
+        background: rgba(0, 212, 170, 0.95);
+        color: white;
+        border: 1px solid rgba(0, 212, 170, 0.5);
+    }
+
+    .toast--error {
+        background: rgba(255, 77, 106, 0.95);
+        color: white;
+        border: 1px solid rgba(255, 77, 106, 0.5);
+    }
+
+    @keyframes toastSlide {
+        from {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
         }
     }
 </style>

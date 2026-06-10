@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
+import '../services/nominatim_service.dart';
+import '../services/websocket_service.dart';
 import 'order_detail_page.dart';
 import 'profile_page.dart';
 
@@ -28,17 +32,32 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = true;
   Timer? _locationTimer;
   Position? _currentPosition;
+  bool _showMapView = false;
+  StreamSubscription? _orderUpdateSubscription;
+  Timer? _orderPollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
     _initLocationTracking();
+
+    _orderPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      debugPrint('[_HomePage] Polling refresh orders...');
+      _loadOrders();
+    });
+
+    _orderUpdateSubscription = WebSocketService.instance.orderUpdates.listen((data) {
+      debugPrint('[_HomePage] New order event received, refreshing orders...');
+      _loadOrders();
+    });
   }
 
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _orderPollingTimer?.cancel();
+    _orderUpdateSubscription?.cancel();
     super.dispose();
   }
 
@@ -59,14 +78,17 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (permission == LocationPermission.deniedForever) {
-      debugPrint('[_initLocationTracking] Location permission permanently denied');
+      debugPrint(
+        '[_initLocationTracking] Location permission permanently denied',
+      );
       return;
     }
 
-    _locationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _locationTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _sendLocationUpdate();
     });
 
+    WebSocketService.instance.connect(widget.driverId);
     _sendLocationUpdate();
   }
 
@@ -81,11 +103,19 @@ class _HomePageState extends State<HomePage> {
 
       _currentPosition = position;
 
-      await ApiService.updateDriverLocation(
+      final wsSuccess = await WebSocketService.instance.sendLocationUpdate(
         driverId: widget.driverId,
         lat: position.latitude,
         lng: position.longitude,
       );
+
+      if (!wsSuccess) {
+        await ApiService.updateDriverLocation(
+          driverId: widget.driverId,
+          lat: position.latitude,
+          lng: position.longitude,
+        );
+      }
 
       debugPrint(
         '[HomePage] Location updated: ${position.latitude}, ${position.longitude}',
@@ -96,22 +126,39 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadOrders() async {
+    debugPrint(
+      '[HomePage] _loadOrders called for driverId: ${widget.driverId}',
+    );
     try {
       final assignedData = await ApiService.fetchOrdersByDriver(
         widget.driverId,
       );
+      debugPrint(
+        '[HomePage] fetchOrdersByDriver returned ${assignedData.length} orders',
+      );
       final pendingData = await ApiService.fetchPendingOrders();
+      debugPrint(
+        '[HomePage] fetchPendingOrders returned ${pendingData.length} orders',
+      );
       if (mounted) {
         final allOrders = [
           ...assignedData.map((json) => OrderModel.fromJson(json)),
           ...pendingData.map((json) => OrderModel.fromJson(json)),
         ];
+        debugPrint('[HomePage] Total orders to display: ${allOrders.length}');
+        for (final order in allOrders) {
+          debugPrint(
+            '[HomePage] Order: ${order.id}, status: ${order.status}, apiId: ${order.apiId}',
+          );
+        }
         setState(() {
           orders = allOrders;
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[HomePage] _loadOrders error: $e');
+      debugPrint('[HomePage] Stack trace: $stack');
       if (mounted) {
         setState(() {
           orders = [];
@@ -235,11 +282,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _currentIndex == 0
-          ? _OrdersTab(
-              driverName: widget.driverName,
-              orders: orders,
-              onStatusUpdate: _updateOrderStatus,
-            )
+          ? _buildOrdersView()
           : ProfilePage(
               driverName: widget.driverName,
               driverId: widget.driverId,
@@ -272,17 +315,73 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  Widget _buildOrdersView() {
+    return Stack(
+      children: [
+        _showMapView
+            ? _MapViewTab(
+                orders: orders
+                    .where((o) => o.status != OrderStatus.delivered)
+                    .toList(),
+                onOrderTap: (order) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => OrderDetailPage(
+                        order: order,
+                        onStatusUpdate: _updateOrderStatus,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : _OrdersTab(
+                driverName: widget.driverName,
+                orders: orders,
+                onStatusUpdate: _updateOrderStatus,
+                onMapToggle: () => setState(() => _showMapView = true),
+              ),
+        // Floating map toggle button (only in list view)
+        if (!_showMapView)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              heroTag: 'map_toggle',
+              backgroundColor: const Color(0xFF1565C0),
+              onPressed: () => setState(() => _showMapView = true),
+              child: const Icon(Icons.map, color: Colors.white),
+            ),
+          ),
+        // Floating list toggle button (only in map view)
+        if (_showMapView)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              heroTag: 'list_toggle',
+              backgroundColor: const Color(0xFF1565C0),
+              onPressed: () => setState(() => _showMapView = false),
+              child: const Icon(Icons.list, color: Colors.white),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _OrdersTab extends StatelessWidget {
   final String driverName;
   final List<OrderModel> orders;
   final Function(String, OrderStatus) onStatusUpdate;
+  final VoidCallback onMapToggle;
 
   const _OrdersTab({
     required this.driverName,
     required this.orders,
     required this.onStatusUpdate,
+    required this.onMapToggle,
   });
 
   @override
@@ -465,6 +564,7 @@ class _OrdersTab extends StatelessWidget {
                       ),
                     );
                   },
+                  isCompleted: false,
                 ),
                 childCount: activeOrders.length,
               ),
@@ -495,6 +595,403 @@ class _OrdersTab extends StatelessWidget {
           ),
 
         const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
+      ],
+    );
+  }
+}
+
+// --- Map View Tab ---
+class _MapViewTab extends StatefulWidget {
+  final List<OrderModel> orders;
+  final Function(OrderModel) onOrderTap;
+
+  const _MapViewTab({required this.orders, required this.onOrderTap});
+
+  @override
+  State<_MapViewTab> createState() => _MapViewTabState();
+}
+
+class _MapViewTabState extends State<_MapViewTab> {
+  final MapController _mapController = MapController();
+  double? _driverLat;
+  double? _driverLng;
+  Timer? _locationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDriverLocation();
+    _startLocationUpdates();
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initDriverLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _driverLat = position.latitude;
+          _driverLng = position.longitude;
+        });
+        _fitBounds();
+      }
+    } catch (e) {
+      debugPrint('[_MapViewTab] Failed to get location: $e');
+    }
+  }
+
+  void _startLocationUpdates() {
+    _locationTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 5),
+          ),
+        );
+        if (mounted) {
+          setState(() {
+            _driverLat = position.latitude;
+            _driverLng = position.longitude;
+          });
+        }
+      } catch (e) {
+        debugPrint('[_MapViewTab] Location update failed: $e');
+      }
+    });
+  }
+
+  void _fitBounds() {
+    final points = <LatLng>[];
+    points.add(LatLng(NominatimService.STORE_LAT, NominatimService.STORE_LNG));
+    for (final order in widget.orders) {
+      if (order.deliveryLat != 0 && order.deliveryLng != 0) {
+        points.add(LatLng(order.deliveryLat, order.deliveryLng));
+      }
+    }
+    if (_driverLat != null && _driverLng != null) {
+      points.add(LatLng(_driverLat!, _driverLng!));
+    }
+    if (points.length >= 2) {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitCamera(
+        CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(80)),
+      );
+    }
+  }
+
+  Color _statusColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+        return const Color(0xFFFFA726);
+      case OrderStatus.pickingUp:
+        return const Color(0xFF42A5F5);
+      case OrderStatus.pickedUp:
+        return const Color(0xFF7E57C2);
+      case OrderStatus.delivering:
+        return const Color(0xFF26A69A);
+      case OrderStatus.delivered:
+        return const Color(0xFF66BB6A);
+    }
+  }
+
+  IconData _statusIcon(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+        return Icons.hourglass_empty;
+      case OrderStatus.pickingUp:
+        return Icons.directions_walk;
+      case OrderStatus.pickedUp:
+        return Icons.inventory_2;
+      case OrderStatus.delivering:
+        return Icons.local_shipping;
+      case OrderStatus.delivered:
+        return Icons.check_circle;
+    }
+  }
+
+  List<Marker> get _markers {
+    final List<Marker> markers = [];
+
+    markers.add(
+      Marker(
+        point: LatLng(NominatimService.STORE_LAT, NominatimService.STORE_LNG),
+        width: 50,
+        height: 60,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1565C0),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'TOKO',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const Icon(Icons.warehouse, color: Color(0xFF1565C0), size: 30),
+          ],
+        ),
+      ),
+    );
+
+    for (final order in widget.orders) {
+      if (order.deliveryLat != 0 && order.deliveryLng != 0) {
+        final color = _statusColor(order.status);
+        markers.add(
+          Marker(
+            point: LatLng(order.deliveryLat, order.deliveryLng),
+            width: 50,
+            height: 70,
+            child: GestureDetector(
+              onTap: () => widget.onOrderTap(order),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      order.statusLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Icon(_statusIcon(order.status), color: color, size: 28),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (_driverLat != null && _driverLng != null) {
+      markers.add(
+        Marker(
+          point: LatLng(_driverLat!, _driverLng!),
+          width: 50,
+          height: 60,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF43A047),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'SAYA',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.local_shipping,
+                color: Color(0xFF43A047),
+                size: 30,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          flex: 3,
+          child: Stack(
+            children: [
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    NominatimService.STORE_LAT,
+                    NominatimService.STORE_LNG,
+                  ),
+                  initialZoom: 12,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.kelun.currier',
+                  ),
+                  MarkerLayer(markers: _markers),
+                ],
+              ),
+              Positioned(
+                top: 16,
+                left: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.warehouse,
+                        size: 16,
+                        color: Color(0xFF1565C0),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${widget.orders.length} pesanan aktif',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Color(0xFF1565C0),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: FloatingActionButton.small(
+                  heroTag: 'fit_bounds',
+                  backgroundColor: Colors.white,
+                  onPressed: _fitBounds,
+                  child: const Icon(Icons.fit_screen, color: Color(0xFF1565C0)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: Container(
+            color: Colors.white,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: widget.orders.length,
+              itemBuilder: (ctx, i) {
+                final order = widget.orders[i];
+                return GestureDetector(
+                  onTap: () => widget.onOrderTap(order),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _statusColor(
+                              order.status,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _statusIcon(order.status),
+                            color: _statusColor(order.status),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                order.customerName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                order.deliveryAddress,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _statusColor(
+                              order.status,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            order.statusLabel,
+                            style: TextStyle(
+                              color: _statusColor(order.status),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -560,11 +1057,7 @@ class _OrderCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool isCompleted;
 
-  const _OrderCard({
-    required this.order,
-    required this.onTap,
-    this.isCompleted = false,
-  });
+  const _OrderCard({required this.order, required this.onTap, required this.isCompleted});
 
   Color _statusColor() {
     switch (order.status) {

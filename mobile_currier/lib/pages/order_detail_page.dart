@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../models/order_model.dart';
 import 'delivery_map_page.dart';
 import 'delivery_confirmation_page.dart';
@@ -306,7 +305,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                             ? Image.network(
                                 _order.deliveryPhoto!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Center(
+                                errorBuilder: (_, _, _) => const Center(
                                   child: Icon(
                                     Icons.broken_image,
                                     size: 48,
@@ -318,7 +317,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                             ? Image.network(
                                 'http://localhost:3000/${_order.deliveryPhoto}',
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Center(
+                                errorBuilder: (_, _, _) => const Center(
                                   child: Icon(
                                     Icons.broken_image,
                                     size: 48,

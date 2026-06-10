@@ -356,7 +356,7 @@ class ProductDetailPage extends StatelessWidget {
           child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         );
       },
-      errorBuilder: (_, __, ___) => Container(
+      errorBuilder: (_, _, _) => Container(
         width: width,
         height: height,
         color: Colors.grey[200],

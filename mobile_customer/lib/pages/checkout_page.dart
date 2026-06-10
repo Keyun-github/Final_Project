@@ -36,6 +36,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _isSearching = false;
   List<NominatimPlace> _suggestions = [];
 
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
   double get _totalWithDelivery => widget.cart.totalPrice + 10000;
 
   String get _formattedSubtotal =>
@@ -132,7 +136,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
       body: Column(
         children: [
-          // Map - Always visible at top
           Expanded(
             flex: 2,
             child: Stack(
@@ -168,7 +171,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                   ],
                 ),
-                // Search overlay on top of map
                 Positioned(
                   top: 12,
                   left: 12,
@@ -277,7 +279,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ],
                   ),
                 ),
-                // Coordinates display
                 if (_selectedLat != null && _selectedLng != null)
                   Positioned(
                     bottom: 12,
@@ -305,7 +306,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ],
             ),
           ),
-          // Form content below map
           Expanded(
             flex: 3,
             child: SingleChildScrollView(
@@ -315,7 +315,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ===== Customer Info =====
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -373,10 +372,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // ===== Address Info =====
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -437,10 +433,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // ===== Time Slot =====
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -556,10 +549,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // ===== Order Summary =====
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -671,7 +661,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 100),
                   ],
                 ),
@@ -709,6 +698,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 MaterialPageRoute(
                   builder: (context) => PaymentPage(
                     cart: widget.cart,
+                    customerId: (widget.customer['id'] as num).toInt(),
                     customerName: _nameController.text.trim(),
                     customerPhone: _phoneController.text.trim(),
                     customerAddress: _addressController.text.trim(),

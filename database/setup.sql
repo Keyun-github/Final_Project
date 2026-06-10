@@ -127,8 +127,8 @@ ON CONFLICT (username) DO NOTHING;
 -- ============================================
 INSERT INTO products (name, description, price, "imageUrl", category, rating, sold, seller, "sellerCity", stock, unit)
 VALUES 
-    ('Gula Pasir Premium', 'Gula pasir putih kualitas premium, cocok untuk kebutuhan masakan dan minuman sehari-hari.', 15000, 'https://picsum.photos/seed/sugar/400/400', 'Food & Drinks', 4.8, 21500, 'Distributor Sembako', 'Jakarta', 40, 'KG'),
-    ('Kopi Kapal Api Special', 'Kopi bubuk instan dengan aroma yang khas dan nikmat, sangat cocok menemani pagi hari Anda.', 3500, 'https://picsum.photos/seed/coffee_packet/400/400', 'Food & Drinks', 4.9, 15420, 'Kopi Nusantara', 'Surabaya', 90, 'Piece'),
+    ('Gula Pasir Premium', 'Gula pasir putih kualitas premium, cocok untuk kebutuhan masakan dan minuman sehari-hari.', 15000, 'https://awsimages.detik.net.id/community/media/visual/2015/09/02/0304cf7b-5d92-4636-8ccc-8fe21e13f881.jpg?w=600&q=90', 'Food & Drinks', 4.8, 21500, 'Distributor Sembako', 'Jakarta', 40, 'KG'),
+    ('Kopi Kapal Api Special', 'Kopi bubuk instan dengan aroma yang khas dan nikmat, sangat cocok menemani pagi hari Anda.', 3500, 'https://secangkirsemangat.id/storage/products/155/01JCFZWEWQTQ0Y3GKABHSW1G8N.jpg', 'Food & Drinks', 4.9, 15420, 'Kopi Nusantara', 'Surabaya', 90, 'Piece'),
     ('Wireless Bluetooth Earbuds Pro', 'Premium wireless earbuds with active noise cancellation, 30-hour battery life, and IPX5 water resistance.', 299000, 'https://picsum.photos/seed/earbuds/400/400', 'Electronics', 4.8, 1250, 'TechStore Official', 'Jakarta', 50, 'Piece'),
     ('Kaos Polos Katun Premium', 'Kaos polos bahan katun combed 30s yang adem dan nyaman dipakai sehari-hari.', 89000, 'https://picsum.photos/seed/tshirt/400/400', 'Fashion', 4.6, 5420, 'Fashion House', 'Bandung', 100, 'Piece'),
     ('Sepatu Running Ultralight', 'Sepatu olahraga ultralight dengan sol empuk untuk kenyamanan maksimal saat berlari.', 459000, 'https://picsum.photos/seed/shoes/400/400', 'Fashion', 4.7, 890, 'Sport Zone', 'Surabaya', 30, 'Piece'),

@@ -7,12 +7,17 @@ class ApiService {
 
   // ===== Orders =====
   static Future<List<Map<String, dynamic>>> fetchOrders() async {
-    final response = await http.get(Uri.parse('$baseUrl/orders'));
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.cast<Map<String, dynamic>>();
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/orders'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      debugPrint('[ApiService] fetchOrders error: status=${response.statusCode}');
+    } catch (e) {
+      debugPrint('[ApiService] fetchOrders error: $e');
     }
-    throw Exception('Failed to load orders: ${response.statusCode}');
+    throw Exception('Failed to load orders');
   }
 
   static Future<Map<String, dynamic>> updateOrderStatus(
@@ -36,6 +41,7 @@ class ApiService {
     if (response.statusCode == 200) {
       return json.decode(response.body);
     }
+    debugPrint('[ApiService] updateOrderStatus error: status=${response.statusCode}, body=${response.body}');
     throw Exception('Failed to update order status: ${response.statusCode}');
   }
 
@@ -88,14 +94,21 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> fetchOrdersByDriver(
     int driverId,
   ) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/orders/driver/$driverId'),
-    );
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.cast<Map<String, dynamic>>();
+    try {
+      final url = '$baseUrl/orders/driver/$driverId';
+      debugPrint('[ApiService] fetchOrdersByDriver URL: $url');
+      final response = await http.get(Uri.parse(url));
+      debugPrint('[ApiService] fetchOrdersByDriver status: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        debugPrint('[ApiService] fetchOrdersByDriver data length: ${data.length}');
+        return data.cast<Map<String, dynamic>>();
+      }
+      debugPrint('[ApiService] fetchOrdersByDriver error: status=${response.statusCode}');
+    } catch (e) {
+      debugPrint('[ApiService] fetchOrdersByDriver error: $e');
     }
-    throw Exception('Failed to load orders: ${response.statusCode}');
+    throw Exception('Failed to load orders');
   }
 
   static Future<Map<String, dynamic>> assignDriverToOrder(
@@ -114,21 +127,35 @@ class ApiService {
   }
 
   static Future<List<Map<String, dynamic>>> fetchUnassignedOrders() async {
-    final response = await http.get(Uri.parse('$baseUrl/orders/unassigned'));
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.cast<Map<String, dynamic>>();
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/orders/unassigned'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      debugPrint('[ApiService] fetchUnassignedOrders error: status=${response.statusCode}');
+    } catch (e) {
+      debugPrint('[ApiService] fetchUnassignedOrders error: $e');
     }
-    throw Exception('Failed to load orders: ${response.statusCode}');
+    throw Exception('Failed to load orders');
   }
 
   static Future<List<Map<String, dynamic>>> fetchPendingOrders() async {
-    final response = await http.get(Uri.parse('$baseUrl/orders/pending'));
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.cast<Map<String, dynamic>>();
+    try {
+      final url = '$baseUrl/orders/pending';
+      debugPrint('[ApiService] fetchPendingOrders URL: $url');
+      final response = await http.get(Uri.parse(url));
+      debugPrint('[ApiService] fetchPendingOrders status: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        debugPrint('[ApiService] fetchPendingOrders data length: ${data.length}');
+        return data.cast<Map<String, dynamic>>();
+      }
+      debugPrint('[ApiService] fetchPendingOrders error: status=${response.statusCode}');
+    } catch (e) {
+      debugPrint('[ApiService] fetchPendingOrders error: $e');
     }
-    throw Exception('Failed to load orders: ${response.statusCode}');
+    throw Exception('Failed to load orders');
   }
 
   static Future<Map<String, dynamic>?> acceptOrder(
@@ -209,6 +236,100 @@ class ApiService {
     } catch (e) {
       debugPrint('[ApiService] updateDriverLocation error: $e');
       return false;
+    }
+  }
+
+  static Future<Map<String, String?>> fetchOrderRoutes(int orderId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/orders/$orderId/routes'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return {
+          'routeToStore': data['routeToStore'] as String?,
+          'routeToDestination': data['routeToDestination'] as String?,
+        };
+      }
+      return {'routeToStore': null, 'routeToDestination': null};
+    } catch (e) {
+      debugPrint('[ApiService] fetchOrderRoutes error: $e');
+      return {'routeToStore': null, 'routeToDestination': null};
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateDeliveryCoords(
+    int orderId,
+    double lat,
+    double lng,
+    String status, {
+    double? snappedLat,
+    double? snappedLng,
+  }) async {
+    try {
+      debugPrint('[ApiService] updateDeliveryCoords: orderId=$orderId, lat=$lat, lng=$lng, status=$status, snappedLat=$snappedLat, snappedLng=$snappedLng');
+
+      final body = {
+        'lat': lat,
+        'lng': lng,
+        'status': status,
+      };
+
+      if (snappedLat != null && snappedLng != null) {
+        body['snappedLat'] = snappedLat;
+        body['snappedLng'] = snappedLng;
+      }
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/orders/$orderId/delivery-coords'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      );
+
+      debugPrint('[ApiService] updateDeliveryCoords response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ApiService] updateDeliveryCoords error: $e');
+      return null;
+    }
+  }
+
+  // ===== Chat =====
+  static Future<Map<String, dynamic>?> post(String endpoint, Map<String, dynamic> body) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(body),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ApiService] POST error: $e');
+      return null;
+    }
+  }
+
+  Future<List<dynamic>> get(String endpoint) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl$endpoint'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[ApiService] GET error: $e');
+      return [];
     }
   }
 }

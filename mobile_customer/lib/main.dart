@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:async';
 import 'models/product.dart';
 import 'providers/cart_provider.dart';
 import 'pages/product_detail_page.dart';
 import 'pages/cart_page.dart';
 import 'pages/login_page.dart';
-import 'pages/register_page.dart';
 import 'pages/account_page.dart';
 import 'services/api_service.dart';
+import 'services/products_socket_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -44,30 +45,25 @@ class CatalogHomePage extends StatefulWidget {
 
 class _CatalogHomePageState extends State<CatalogHomePage> {
   final CartProvider _cart = CartProvider();
-  String _selectedCategory = 'All';
+  Map<String, dynamic>? _customer;
+  bool _isLoading = true;
+  bool _isUsingDemoData = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   List<Product> _products = [];
-  bool _isLoading = true;
-  bool _isUsingDemoData = false;
-  Map<String, dynamic>? _customer;
+  StreamSubscription? _productCreatedSub;
+  StreamSubscription? _productUpdatedSub;
+  StreamSubscription? _productDeletedSub;
 
   List<Product> get filteredProducts {
     var products = _products;
-
-    if (_selectedCategory != 'All') {
-      products = products
-          .where((p) => p.category == _selectedCategory)
-          .toList();
-    }
 
     if (_searchQuery.isNotEmpty) {
       products = products
           .where(
             (p) =>
-                p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                p.category.toLowerCase().contains(_searchQuery.toLowerCase()),
+                p.name.toLowerCase().contains(_searchQuery.toLowerCase()),
           )
           .toList();
     }
@@ -82,6 +78,26 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
       if (mounted) setState(() {});
     });
     _loadProducts();
+    _initProductsSocket();
+  }
+
+  void _initProductsSocket() {
+    ProductsSocketService.instance.connect();
+    _productCreatedSub = ProductsSocketService.instance.productCreatedUpdates.listen((data) {
+      if (mounted) {
+        _loadProducts();
+      }
+    });
+    _productUpdatedSub = ProductsSocketService.instance.productUpdatedUpdates.listen((data) {
+      if (mounted) {
+        _loadProducts();
+      }
+    });
+    _productDeletedSub = ProductsSocketService.instance.productDeletedUpdates.listen((data) {
+      if (mounted) {
+        _loadProducts();
+      }
+    });
   }
 
   Future<void> _loadProducts() async {
@@ -118,6 +134,10 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
   void dispose() {
     _searchController.dispose();
     _searchFocus.dispose();
+    _productCreatedSub?.cancel();
+    _productUpdatedSub?.cancel();
+    _productDeletedSub?.cancel();
+    ProductsSocketService.instance.dispose();
     super.dispose();
   }
 
@@ -322,58 +342,6 @@ class _CatalogHomePageState extends State<CatalogHomePage> {
                       ),
                   ],
                 ),
-              ),
-            ),
-
-            // ===== Category Tabs =====
-            Container(
-              color: Colors.white,
-              height: 44,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: categories.length,
-                itemBuilder: (context, index) {
-                  final cat = categories[index];
-                  final isSelected = _selectedCategory == cat;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedCategory = cat;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF6C63FF)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF6C63FF)
-                                : Colors.grey[300]!,
-                          ),
-                        ),
-                        child: Text(
-                          cat,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: isSelected ? Colors.white : Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
               ),
             ),
 
@@ -596,7 +564,7 @@ class _ProductCard extends StatelessWidget {
                               ),
                             );
                           },
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             color: Colors.grey[200],
                             child: const Center(
                               child: Icon(

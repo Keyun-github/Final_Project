@@ -1,7 +1,10 @@
+import '../services/nominatim_service.dart';
+
 class OrderModel {
   final String id;
   final int? apiId;
   final int? driverId;
+  final int? customerId;
   final String customerName;
   final String customerPhone;
   final String pickupAddress;
@@ -21,6 +24,7 @@ class OrderModel {
     required this.id,
     this.apiId,
     this.driverId,
+    this.customerId,
     required this.customerName,
     required this.customerPhone,
     required this.pickupAddress,
@@ -30,22 +34,37 @@ class OrderModel {
     required this.totalAmount,
     required this.status,
     required this.createdAt,
-    this.pickupLat = -6.2088,
-    this.pickupLng = 106.8456,
-    this.deliveryLat = -6.1944,
-    this.deliveryLng = 106.8229,
+    this.pickupLat = 0.0,
+    this.pickupLng = 0.0,
+    this.deliveryLat = 0.0,
+    this.deliveryLng = 0.0,
     this.deliveryPhoto,
   });
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     final items = json['items'] as List? ?? [];
     final itemNames = items
         .map((i) => '${i['productName']} x${i['quantity']}')
         .join(', ');
-    final itemCount = items.fold<int>(
-      0,
-      (sum, i) => sum + ((i['quantity'] ?? 1) as int),
-    );
+    int itemCount = 0;
+    for (final i in items) {
+      final qty = i['quantity'];
+      if (qty != null) {
+        if (qty is int) {
+          itemCount += qty;
+        } else if (qty is String) {
+          itemCount += int.tryParse(qty) ?? 0;
+        }
+      }
+    }
+    if (itemCount == 0) itemCount = 1;
 
     return OrderModel(
       id:
@@ -56,11 +75,10 @@ class OrderModel {
           : 'ORD-${json['id'] ?? 0}',
       apiId: json['id'],
       driverId: json['driverId'],
+      customerId: json['customerId'],
       customerName: json['customerName'] ?? '',
       customerPhone: json['customerPhone'] ?? '',
-      pickupAddress:
-          json['pickupAddress'] ??
-          'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+      pickupAddress: json['pickupAddress'] ?? NominatimService.STORE_ADDRESS,
       deliveryAddress: json['deliveryAddress'] ?? '',
       itemDescription: itemNames.isNotEmpty ? itemNames : 'Order items',
       itemCount: itemCount > 0 ? itemCount : 1,
@@ -69,10 +87,10 @@ class OrderModel {
           : double.tryParse(json['totalAmount']?.toString() ?? '0') ?? 0,
       status: OrderStatus.fromString(json['status'] ?? 'pending'),
       createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-      pickupLat: -6.1275,
-      pickupLng: 106.8686,
-      deliveryLat: -6.1944 + (json['id'] as int? ?? 0) * 0.01,
-      deliveryLng: 106.8229 + (json['id'] as int? ?? 0) * 0.005,
+      pickupLat: _parseDouble(json['pickupLat']),
+      pickupLng: _parseDouble(json['pickupLng']),
+      deliveryLat: _parseDouble(json['deliveryLat']),
+      deliveryLng: _parseDouble(json['deliveryLng']),
       deliveryPhoto: json['deliveryPhoto'],
     );
   }
@@ -143,15 +161,15 @@ List<OrderModel> demoOrders = [
     id: 'ORD-20260311-001',
     customerName: 'Budi Santoso',
     customerPhone: '081234567890',
-    pickupAddress: 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+    pickupAddress: NominatimService.STORE_ADDRESS,
     deliveryAddress: 'Jl. Merdeka No. 42, Kelapa Gading, Jakarta Utara',
     itemDescription: 'Beras Premium 5kg (x2), Minyak Goreng 2L',
     itemCount: 3,
     totalAmount: 185000,
     status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
-    pickupLat: -6.1275,
-    pickupLng: 106.8686,
+    pickupLat: NominatimService.STORE_LAT,
+    pickupLng: NominatimService.STORE_LNG,
     deliveryLat: -6.1577,
     deliveryLng: 106.9073,
   ),
@@ -159,15 +177,15 @@ List<OrderModel> demoOrders = [
     id: 'ORD-20260311-002',
     customerName: 'Siti Rahayu',
     customerPhone: '082198765432',
-    pickupAddress: 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+    pickupAddress: NominatimService.STORE_ADDRESS,
     deliveryAddress: 'Jl. Kemang Raya No. 8, Jakarta Selatan',
     itemDescription: 'Telur Ayam 1 Box, Susu UHT 1 Box',
     itemCount: 2,
     totalAmount: 120000,
     status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
-    pickupLat: -6.1275,
-    pickupLng: 106.8686,
+    pickupLat: NominatimService.STORE_LAT,
+    pickupLng: NominatimService.STORE_LNG,
     deliveryLat: -6.2615,
     deliveryLng: 106.8106,
   ),
@@ -175,15 +193,15 @@ List<OrderModel> demoOrders = [
     id: 'ORD-20260311-003',
     customerName: 'Agus Wijaya',
     customerPhone: '085678901234',
-    pickupAddress: 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+    pickupAddress: NominatimService.STORE_ADDRESS,
     deliveryAddress: 'Jl. Sudirman No. 55, Jakarta Pusat',
     itemDescription: 'Gula Pasir 25kg (x1)',
     itemCount: 1,
     totalAmount: 325000,
     status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 20)),
-    pickupLat: -6.1275,
-    pickupLng: 106.8686,
+    pickupLat: NominatimService.STORE_LAT,
+    pickupLng: NominatimService.STORE_LNG,
     deliveryLat: -6.2088,
     deliveryLng: 106.8228,
   ),
@@ -191,15 +209,15 @@ List<OrderModel> demoOrders = [
     id: 'ORD-20260311-004',
     customerName: 'Dewi Lestari',
     customerPhone: '087812345678',
-    pickupAddress: 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+    pickupAddress: NominatimService.STORE_ADDRESS,
     deliveryAddress: 'Jl. Cikini Raya No. 12, Jakarta Pusat',
     itemDescription: 'Tepung Terigu 50kg (x1), Kopi Bubuk 500g (x3)',
     itemCount: 4,
     totalAmount: 695000,
     status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-    pickupLat: -6.1275,
-    pickupLng: 106.8686,
+    pickupLat: NominatimService.STORE_LAT,
+    pickupLng: NominatimService.STORE_LNG,
     deliveryLat: -6.1890,
     deliveryLng: 106.8404,
   ),
@@ -207,15 +225,15 @@ List<OrderModel> demoOrders = [
     id: 'ORD-20260311-005',
     customerName: 'Riko Pratama',
     customerPhone: '089912345678',
-    pickupAddress: 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
+    pickupAddress: NominatimService.STORE_ADDRESS,
     deliveryAddress: 'Jl. Pluit Karang No. 7, Jakarta Utara',
     itemDescription: 'Sabun Cuci 5kg (x2), Minyak Goreng 5L (x1)',
     itemCount: 3,
     totalAmount: 142000,
     status: OrderStatus.pending,
     createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
-    pickupLat: -6.1275,
-    pickupLng: 106.8686,
+    pickupLat: NominatimService.STORE_LAT,
+    pickupLng: NominatimService.STORE_LNG,
     deliveryLat: -6.1260,
     deliveryLng: 106.7969,
   ),

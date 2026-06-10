@@ -1,34 +1,296 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { fetchAvailableDrivers, type Employee } from "$lib/api";
+    import { fetchAvailableDrivers, fetchOrderRoutes, type Employee } from "$lib/api";
+    import { initWebSocket, setLocationUpdateHandler, disconnectWebSocket, type DriverLocationUpdate } from "$lib/websocket";
 
     let drivers = $state<Employee[]>([]);
     let isLoading = $state(true);
     let searchQuery = $state("");
     let expandedDriverId = $state<number | null>(null);
     let pollInterval: any = $state(null);
+    let mapInstances: Map<number, any> = new Map();
+    let driverRoutes: Map<number, { routeToStore: string | null; routeToDestination: string | null }> = new Map();
+    let mapInitTimers: Map<number, any> = new Map();
+    let pendingMapInits: Set<number> = new Set();
+    let abortController: AbortController | null = null;
+
+    const STORE_LAT = -7.2628478;
+    const STORE_LNG = 112.7336368;
+    const STORE_NAME = "Jl. Kedung Rukem IV / 55";
 
     onMount(async () => {
         await loadDrivers();
         pollInterval = setInterval(() => {
             loadDrivers();
         }, 30000);
+
+        initWebSocket();
+        setLocationUpdateHandler(handleDriverLocationUpdate);
     });
 
     onDestroy(() => {
         if (pollInterval) clearInterval(pollInterval);
+        if (abortController) abortController.abort();
+        mapInitTimers.forEach((timer) => clearTimeout(timer));
+        mapInitTimers.clear();
+        pendingMapInits.clear();
+        mapInstances.forEach((map) => map.remove());
+        mapInstances.clear();
+        disconnectWebSocket();
     });
+
+    function handleDriverLocationUpdate(data: DriverLocationUpdate) {
+        const driverIndex = drivers.findIndex(d => d.id === data.driverId);
+        if (driverIndex !== -1) {
+            const updatedDriver = {
+                ...drivers[driverIndex],
+                currentLat: data.lat,
+                currentLng: data.lng
+            };
+            drivers[driverIndex] = updatedDriver;
+            drivers = [...drivers];
+
+            const map = mapInstances.get(data.driverId);
+            if (map) {
+                map.setView([data.lat, data.lng], map.getZoom());
+                map.eachLayer((layer: any) => {
+                    if (layer instanceof (window as any).L.Marker) {
+                        const popup = layer.getPopup();
+                        if (popup && popup.getContent().includes('On Duty')) {
+                            layer.setLatLng([data.lat, data.lng]);
+                        }
+                    }
+                });
+            }
+        }
+    }
 
     async function loadDrivers() {
         try {
             isLoading = true;
-            const data = await fetchAvailableDrivers();
-            drivers = data;
+            if (abortController) {
+                abortController.abort();
+            }
+            abortController = new AbortController();
+            const data = await fetchAvailableDrivers(abortController.signal);
+            if (data) {
+                drivers = data;
+            }
         } catch (e) {
-            console.error("Failed to load drivers:", e);
+            if ((e as Error).name !== 'AbortError') {
+                console.error("Failed to load drivers:", e);
+            }
         } finally {
             isLoading = false;
+            setTimeout(initMaps, 100);
         }
+    }
+
+    function decodePolyline(encoded: string): [number, number][] {
+        const points: [number, number][] = [];
+        let index = 0;
+        let lat = 0;
+        let lng = 0;
+        while (index < encoded.length) {
+            let b: number;
+            let shift = 0;
+            let result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlat = (result & 1) ? ~(result >> 1) : result >> 1;
+            lat += dlat;
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            const dlng = (result & 1) ? ~(result >> 1) : result >> 1;
+            lng += dlng;
+            points.push([lat / 1e5, lng / 1e5]);
+        }
+        return points;
+    }
+
+    function initMaps() {
+        initMapInstances();
+    }
+
+function initMapInstances() {
+        if (typeof window === "undefined" || !(window as any).L) {
+            if (!document.getElementById('leaflet-script')) {
+                const script = document.createElement("script");
+                script.id = 'leaflet-script';
+                script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+                script.onload = () => initMapInstances();
+                document.head.appendChild(script);
+
+                const link = document.createElement("link");
+                link.rel = "stylesheet";
+                link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+                link.id = 'leaflet-css';
+                document.head.appendChild(link);
+            }
+            return;
+        }
+
+        drivers.forEach((driver) => {
+            if (expandedDriverId !== driver.id) return;
+            const containerId = `map-${driver.id}`;
+            const existingMap = mapInstances.get(driver.id);
+            if (existingMap) {
+                existingMap.remove();
+                mapInstances.delete(driver.id);
+            }
+            if (pendingMapInits.has(driver.id)) return;
+            pendingMapInits.add(driver.id);
+            const timerKey = driver.id;
+            if (mapInitTimers.has(timerKey)) {
+                clearTimeout(mapInitTimers.get(timerKey));
+            }
+            const timer = setTimeout(() => {
+                pendingMapInits.delete(driver.id);
+                mapInitTimers.delete(timerKey);
+                initSingleMap(driver, containerId);
+            }, 50);
+            mapInitTimers.set(timerKey, timer);
+        });
+    }
+
+    function waitForContainer(containerId: string, maxAttempts = 10, interval = 50): Promise<HTMLElement | null> {
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const check = () => {
+                const container = document.getElementById(containerId);
+                if (container || attempts >= maxAttempts) {
+                    resolve(container);
+                } else {
+                    attempts++;
+                    setTimeout(check, interval);
+                }
+            };
+            check();
+        });
+    }
+
+    async function initSingleMap(driver: Employee, containerId: string) {
+        const container = await waitForContainer(containerId);
+        if (!container) {
+            console.error(`Container ${containerId} not found after retries`);
+            pendingMapInits.delete(driver.id);
+            return;
+        }
+        if (mapInstances.has(driver.id)) {
+            pendingMapInits.delete(driver.id);
+            return;
+        }
+
+        try {
+            const L = (window as any).L;
+            const map = L.map(containerId).setView(
+                [driver.currentLat ?? STORE_LAT, driver.currentLng ?? STORE_LNG],
+                15
+            );
+
+            L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: "© OpenStreetMap contributors",
+                maxZoom: 19,
+            }).addTo(map);
+
+            L.marker([STORE_LAT, STORE_LNG], {
+                icon: createStoreIcon(),
+            })
+                .addTo(map)
+                .bindPopup(`<b>TOKO</b><br>${STORE_NAME}`);
+
+            if (driver.currentLat && driver.currentLng) {
+                const driverMarker = L.marker(
+                    [driver.currentLat, driver.currentLng],
+                    { icon: createDriverIcon() }
+                ).addTo(map);
+                driverMarker.bindPopup(
+                    `<b>${driver.name}</b><br>On Duty`
+                ).openPopup();
+            }
+
+            const routes = driverRoutes.get(driver.id);
+            if (routes) {
+                if (routes.routeToStore) {
+                    try {
+                        const storePoints = decodePolyline(routes.routeToStore);
+                        L.polyline(storePoints, {
+                            color: '#1565C0',
+                            weight: 4,
+                            opacity: 0.8,
+                        }).addTo(map);
+                    } catch (e) {
+                        console.error('Failed to decode routeToStore:', e);
+                    }
+                }
+                if (routes.routeToDestination) {
+                    try {
+                        const destPoints = decodePolyline(routes.routeToDestination);
+                        L.polyline(destPoints, {
+                            color: '#E53935',
+                            weight: 4,
+                            opacity: 0.8,
+                        }).addTo(map);
+                    } catch (e) {
+                        console.error('Failed to decode routeToDestination:', e);
+                    }
+                }
+            }
+
+            if (driver.currentLat && driver.currentLng) {
+                const points = [
+                    [STORE_LAT, STORE_LNG],
+                    [driver.currentLat, driver.currentLng],
+                ];
+                if (routes?.routeToDestination) {
+                    points.push([driver.currentLat, driver.currentLng]);
+                }
+                const bounds = L.latLngBounds(points);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+            mapInstances.set(driver.id, map);
+        } catch (e) {
+            console.error(`Failed to init map for driver ${driver.id}:`, e);
+        } finally {
+            pendingMapInits.delete(driver.id);
+        }
+    }
+
+    function createStoreIcon() {
+        const L = (window as any).L;
+        return L.divIcon({
+            className: "custom-marker",
+            html: `<div style="
+                background:#1565C0;color:white;padding:4px 8px;border-radius:8px;
+                font-size:11px;font-weight:700;white-space:nowrap;
+                box-shadow:0 2px 8px rgba(0,0,0,0.3);
+            ">TOKO</div>`,
+            iconSize: [50, 30],
+            iconAnchor: [25, 15],
+        });
+    }
+
+    function createDriverIcon() {
+        const L = (window as any).L;
+        return L.divIcon({
+            className: "custom-marker",
+            html: `<div style="
+                background:#43A047;color:white;padding:4px 8px;border-radius:8px;
+                font-size:11px;font-weight:700;white-space:nowrap;
+                box-shadow:0 2px 8px rgba(0,0,0,0.3);
+            ">DRIVER</div>`,
+            iconSize: [60, 30],
+            iconAnchor: [30, 15],
+        });
     }
 
     let filtered = $derived(
@@ -40,8 +302,58 @@
             : drivers,
     );
 
-    function toggleExpand(id: number) {
-        expandedDriverId = expandedDriverId === id ? null : id;
+    async function toggleExpand(id: number) {
+        if (expandedDriverId === id) {
+            const map = mapInstances.get(id);
+            if (map) {
+                map.remove();
+                mapInstances.delete(id);
+            }
+            const timer = mapInitTimers.get(id);
+            if (timer) {
+                clearTimeout(timer);
+                mapInitTimers.delete(id);
+            }
+            pendingMapInits.delete(id);
+            driverRoutes.delete(id);
+            expandedDriverId = null;
+        } else {
+            if (expandedDriverId !== null) {
+                const oldMap = mapInstances.get(expandedDriverId);
+                if (oldMap) {
+                    oldMap.remove();
+                    mapInstances.delete(expandedDriverId);
+                }
+                const oldTimer = mapInitTimers.get(expandedDriverId);
+                if (oldTimer) {
+                    clearTimeout(oldTimer);
+                    mapInitTimers.delete(expandedDriverId);
+                }
+                pendingMapInits.delete(expandedDriverId);
+            }
+            expandedDriverId = id;
+
+            const driver = drivers.find(d => d.id === id);
+            if (driver?.activeOrderId) {
+                try {
+                    if (abortController) {
+                        abortController.abort();
+                    }
+                    abortController = new AbortController();
+                    const routes = await fetchOrderRoutes(driver.activeOrderId, abortController.signal);
+                    if (routes) {
+                        driverRoutes.set(id, routes);
+                    }
+                    if (expandedDriverId === id) {
+                        setTimeout(() => initMaps(), 150);
+                    }
+                } catch (e) {
+                    if ((e as Error).name !== 'AbortError') {
+                        console.error("Failed to fetch routes:", e);
+                    }
+                }
+            }
+        }
     }
 
     function getDriverById(id: number): Employee | undefined {
@@ -224,30 +536,19 @@
                                                     {driver.isAvailable ? 'Tersedia' : 'On Duty'}
                                                 </span>
                                         </div>
-                                        <div class="map-placeholder">
-                                            <div class="map-grid">
-                                                <div class="map-road map-road-h1"></div>
-                                                <div class="map-road map-road-h2"></div>
-                                                <div class="map-road map-road-v1"></div>
-                                                <div class="map-road map-road-v2"></div>
-                                                <div class="driver-marker">
-                                                    <div class="driver-marker-dot"></div>
-                                                    <div class="driver-marker-pulse"></div>
-                                                </div>
-                                                <div class="destination-marker"></div>
-                                                <div class="route-line"></div>
-                                            </div>
-                                            <div class="map-label">
-                                                <span class="label-driver">Driver</span>
-                                                <span class="label-destination">Tujuan</span>
-                                            </div>
-                                        </div>
+                                        <div id="map-{driver.id}" class="real-map-container"></div>
                                         <div class="driver-info-row">
                                             <div class="info-item">
-                                                <span class="info-label">Koordinat</span>
+                                                <span class="info-label">Koordinat Driver</span>
                                                 <span class="info-value">
-                                                    {driver.currentLat?.toFixed(4) ?? "-"},
-                                                    {driver.currentLng?.toFixed(4) ?? "-"}
+                                                    {Number(driver.currentLat)?.toFixed(6) ?? "-"},
+                                                    {Number(driver.currentLng)?.toFixed(6) ?? "-"}
+                                                </span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">Lokasi Toko</span>
+                                                <span class="info-value">
+                                                    {STORE_NAME}
                                                 </span>
                                             </div>
                                             {#if driver.vehiclePlate}
@@ -266,8 +567,8 @@
                                             {/if}
                                         </div>
                                         <p class="map-note">
-                                            📡 Peta akan menampilkan lokasi real-time saat
-                                            driver mengaktifkan GPS di aplikasi kurir
+                                            🗺️ Peta menunjukkan lokasi driver (hijau) dan toko (biru).
+                                            Marker akan bergerak saat driver mengupdate lokasi.
                                         </p>
                                     </div>
                                 </td>
@@ -288,153 +589,12 @@
 </div>
 
 <style>
-    .map-placeholder {
+    .real-map-container {
         width: 100%;
-        height: 280px;
-        background: #e8f0fe;
+        height: 300px;
         border-radius: var(--radius-md);
         overflow: hidden;
-        position: relative;
-    }
-
-    .map-grid {
-        width: 100%;
-        height: 100%;
-        background: #e8f4f0;
-        position: relative;
-    }
-
-    .map-road {
-        position: absolute;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-    }
-
-    .map-road-h1 {
-        left: 0;
-        right: 0;
-        top: 35%;
-        height: 20px;
-    }
-
-    .map-road-h2 {
-        left: 0;
-        right: 0;
-        top: 65%;
-        height: 20px;
-    }
-
-    .map-road-v1 {
-        top: 0;
-        bottom: 0;
-        left: 30%;
-        width: 20px;
-    }
-
-    .map-road-v2 {
-        top: 0;
-        bottom: 0;
-        left: 70%;
-        width: 20px;
-    }
-
-    .driver-marker {
-        position: absolute;
-        top: 30%;
-        left: 20%;
-        transform: translate(-50%, -50%);
-        z-index: 10;
-    }
-
-    .driver-marker-dot {
-        width: 20px;
-        height: 20px;
-        background: var(--color-primary);
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .driver-marker-pulse {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 40px;
-        height: 40px;
-        background: var(--color-primary);
-        border-radius: 50%;
-        opacity: 0.3;
-        animation: pulse 2s ease-out infinite;
-    }
-
-    @keyframes pulse {
-        0% {
-            transform: translate(-50%, -50%) scale(0.5);
-            opacity: 0.4;
-        }
-        100% {
-            transform: translate(-50%, -50%) scale(1.5);
-            opacity: 0;
-        }
-    }
-
-    .destination-marker {
-        position: absolute;
-        top: 60%;
-        right: 20%;
-        width: 18px;
-        height: 18px;
-        background: #e53935;
-        border: 3px solid white;
-        border-radius: 50%;
-        transform: translate(50%, -50%);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .route-line {
-        position: absolute;
-        top: 35%;
-        left: calc(20% + 10px);
-        width: calc(50% - 10px);
-        height: 3px;
-        background: #9e9e9e;
-    }
-
-    .route-line::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        height: 3px;
-        width: 50%;
-        background: var(--color-primary);
-    }
-
-    .map-label {
-        position: absolute;
-        bottom: 12px;
-        left: 12px;
-        right: 12px;
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .label-driver,
-    .label-destination {
-        background: white;
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    .label-driver {
-        color: var(--color-primary);
-    }
-
-    .label-destination {
-        color: #e53935;
+        z-index: 1;
     }
     .page-header {
         margin-bottom: 24px;

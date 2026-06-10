@@ -44,6 +44,8 @@ class CartProvider extends ChangeNotifier {
 
   String _getCartKey(int customerId) => 'cart_items_$customerId';
 
+  int? get currentCustomerId => _currentCustomerId;
+
   List<CartItem> get items => _items;
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);

@@ -1,15 +1,31 @@
 const BASE_URL = 'http://localhost:3000';
 
+let currentAbortController: AbortController | null = null;
+
 async function request(path: string, options?: RequestInit) {
-    const res = await fetch(`${BASE_URL}${path}`, {
-        headers: { 'Content-Type': 'application/json', ...options?.headers },
-        ...options,
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }));
-        throw new Error(err.message || res.statusText);
+    if (currentAbortController) {
+        currentAbortController.abort();
     }
-    return res.json();
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
+
+    try {
+        const res = await fetch(`${BASE_URL}${path}`, {
+            headers: { 'Content-Type': 'application/json', ...options?.headers },
+            signal,
+            ...options,
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: res.statusText }));
+            throw new Error(err.message || res.statusText);
+        }
+        return res.json();
+    } catch (e) {
+        if ((e as Error).name === 'AbortError') {
+            return null;
+        }
+        throw e;
+    }
 }
 
 // ----- Products -----
@@ -26,7 +42,7 @@ export async function createProduct(data: {
     imageUrl?: string;
     category?: string;
     image?: File | null;
-}): Promise<any> {
+}): Promise<{ action: 'created' | 'updated'; product: any }> {
     if (data.image) {
         const formData = new FormData();
         formData.append('name', data.name);
@@ -93,6 +109,13 @@ export async function fetchOrderStats() {
     return request('/orders/stats');
 }
 
+export async function fetchOrderRoutes(orderId: number, signal?: AbortSignal): Promise<{
+    routeToStore: string | null;
+    routeToDestination: string | null;
+}> {
+    return request(`/orders/${orderId}/routes`, { signal } as RequestInit);
+}
+
 // ----- Employees (Drivers) -----
 export interface Employee {
     id: number;
@@ -107,14 +130,15 @@ export interface Employee {
     vehicleBrand?: string;
     vehiclePlate?: string;
     vehicleColor?: string;
+    activeOrderId?: number | null;
 }
 
 export async function fetchEmployees(): Promise<Employee[]> {
     return request('/drivers');
 }
 
-export async function fetchAvailableDrivers(): Promise<Employee[]> {
-    return request('/drivers');
+export async function fetchAvailableDrivers(signal?: AbortSignal): Promise<Employee[]> {
+    return request('/drivers', { signal } as RequestInit);
 }
 
 export async function createEmployee(data: {
@@ -136,6 +160,51 @@ export async function deleteEmployee(id: number) {
 export async function toggleEmployeeActive(id: number, isActive: boolean) {
     return request(`/drivers/${id}`, {
         method: 'PUT',
+        body: JSON.stringify({ isActive }),
+    });
+}
+
+// ----- Time Slots (Admin) -----
+export interface DashboardSlot {
+    slotId: number;
+    time: string;
+    orderCount: number;
+    bookings: number;
+    maxBookings: number;
+    isActive: boolean;
+}
+
+export interface SlotOrder {
+    id: number;
+    customerName: string;
+    customerPhone: string;
+    status: string;
+    totalAmount: number;
+    createdAt: string;
+    driverName: string | null;
+}
+
+export async function fetchDashboardTimeSlots(
+    date: string,
+): Promise<DashboardSlot[]> {
+    return request(`/time-slots/dashboard?date=${date}`);
+}
+
+export async function fetchOrdersBySlot(
+    date: string,
+    time: string,
+): Promise<SlotOrder[]> {
+    return request(
+        `/time-slots/slot-orders?date=${date}&time=${encodeURIComponent(time)}`,
+    );
+}
+
+export async function setTimeSlotActive(
+    id: number,
+    isActive: boolean,
+): Promise<{ success: boolean; message: string; slot: DashboardSlot }> {
+    return request(`/time-slots/${id}/active`, {
+        method: 'PATCH',
         body: JSON.stringify({ isActive }),
     });
 }

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../services/supabase_service.dart';
@@ -143,12 +142,12 @@ class _PhotoConfirmationPageState extends State<PhotoConfirmationPage> {
           );
 
           // Upload to Supabase
-          final supabaseUrl = await SupabaseService.uploadDeliveryPhoto(photoPath);
+          final supabaseUrl = await SupabaseService.uploadDeliveryPhoto(
+            photoPath,
+          );
 
           if (supabaseUrl != null) {
-            debugPrint(
-              '[_confirm] Supabase upload successful: $supabaseUrl',
-            );
+            debugPrint('[_confirm] Supabase upload successful: $supabaseUrl');
 
             // Save URL to backend
             await ApiService.saveDeliveryPhotoUrl(_orderId, supabaseUrl);

@@ -1,7 +1,11 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../services/api_service.dart';
+import '../services/nominatim_service.dart';
+import '../services/socket_service.dart';
+import 'chat/chat_room_page.dart';
 
 class OrderTrackingPage extends StatefulWidget {
   final String customerName;
@@ -29,6 +33,19 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   Map<String, dynamic>? _orderData;
   bool _isLoading = true;
   Timer? _refreshTimer;
+  final NominatimService _nominatimService = NominatimService();
+  final MapController _mapController = MapController();
+  StreamSubscription? _driverLocationSubscription;
+
+  double? _driverLat;
+  double? _driverLng;
+  double? _customerLat;
+  double? _customerLng;
+  bool _isGeocoding = false;
+  String? _routeToStore;
+  String? _routeToDestination;
+  List<LatLng> _decodedStoreRoute = [];
+  List<LatLng> _decodedDestRoute = [];
 
   String get _currentStatusText {
     if (_orderData == null) return 'Menunggu driver menerima pesanan...';
@@ -70,6 +87,25 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
     super.initState();
     _loadOrderData();
     _startAutoRefresh();
+    _initWebSocket();
+  }
+
+  void _initWebSocket() {
+    SocketService.instance.connect();
+
+    _driverLocationSubscription = SocketService.instance.driverLocationUpdates.listen((data) {
+      if (mounted && data['driverId'] != null) {
+        setState(() {
+          _driverLat = (data['lat'] as num?)?.toDouble();
+          _driverLng = (data['lng'] as num?)?.toDouble();
+        });
+        _fetchRoutes();
+      }
+    });
+
+    if (widget.orderId != null) {
+      SocketService.instance.subscribeToOrder(widget.orderId!);
+    }
   }
 
   Future<void> _loadOrderData() async {
@@ -83,7 +119,10 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
         setState(() {
           _orderData = data;
           _isLoading = false;
+          _updateDriverLocation();
         });
+        _geocodeCustomerAddress();
+        _fetchRoutes();
       }
     } catch (e) {
       if (mounted) {
@@ -92,16 +131,197 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
     }
   }
 
+  Future<void> _fetchRoutes() async {
+    if (widget.orderId == null) {
+      return;
+    }
+    final routes = await ApiService.fetchOrderRoutes(widget.orderId!);
+    if (mounted) {
+      setState(() {
+        _routeToStore = routes['routeToStore'];
+        _routeToDestination = routes['routeToDestination'];
+        if (_routeToStore != null && _routeToStore!.isNotEmpty) {
+          _decodedStoreRoute = _decodePolyline(_routeToStore!);
+        } else {
+          _decodedStoreRoute = [];
+        }
+        if (_routeToDestination != null && _routeToDestination!.isNotEmpty) {
+          _decodedDestRoute = _decodePolyline(_routeToDestination!);
+        } else {
+          _decodedDestRoute = [];
+        }
+      });
+    }
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    final List<LatLng> points = [];
+    var index = 0;
+    var lat = 0;
+    var lng = 0;
+    while (index < encoded.length) {
+      int b;
+      var shift = 0;
+      var result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      final dlat = (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+      lat += dlat;
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      final dlng = (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+      lng += dlng;
+      points.add(LatLng(lat / 1e5, lng / 1e5));
+    }
+    return points;
+  }
+
+  void _updateDriverLocation() {
+    if (_orderData != null && _orderData!['driver'] != null) {
+      final driver = _orderData!['driver'];
+      if (driver['currentLat'] != null && driver['currentLng'] != null) {
+        setState(() {
+          _driverLat = double.tryParse(driver['currentLat'].toString());
+          _driverLng = double.tryParse(driver['currentLng'].toString());
+        });
+      }
+    }
+  }
+
+  Future<void> _geocodeCustomerAddress() async {
+    if (_isGeocoding || _customerLat != null) return;
+    if (widget.customerAddress.isEmpty) return;
+
+    setState(() => _isGeocoding = true);
+
+    final results = await _nominatimService.searchAddress(widget.customerAddress);
+    if (mounted && results.isNotEmpty) {
+      setState(() {
+        _customerLat = results.first.lat;
+        _customerLng = results.first.lon;
+        _isGeocoding = false;
+      });
+    } else {
+      setState(() => _isGeocoding = false);
+    }
+  }
+
   void _startAutoRefresh() {
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _loadOrderData();
+      if (mounted) {
+        _loadOrderData();
+      }
     });
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _driverLocationSubscription?.cancel();
+    if (widget.orderId != null) {
+      SocketService.instance.unsubscribeFromOrder(widget.orderId!);
+    }
+    SocketService.instance.disconnect();
     super.dispose();
+  }
+
+  LatLng? get _mapCenter {
+    if (_driverLat != null && _driverLng != null) {
+      return LatLng(_driverLat!, _driverLng!);
+    }
+    if (_customerLat != null && _customerLng != null) {
+      return LatLng(_customerLat!, _customerLng!);
+    }
+    return const LatLng(-6.2088, 106.8456);
+  }
+
+  List<Marker> get _markers {
+    final List<Marker> markers = [];
+
+    if (_customerLat != null && _customerLng != null) {
+      markers.add(
+        Marker(
+          point: LatLng(_customerLat!, _customerLng!),
+          width: 50,
+          height: 50,
+          child: const Column(
+            children: [
+              Icon(
+                Icons.location_on,
+                color: Color(0xFFE53935),
+                size: 40,
+              ),
+              Text(
+                'Anda',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFE53935),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_driverLat != null && _driverLng != null) {
+      markers.add(
+        Marker(
+          point: LatLng(_driverLat!, _driverLng!),
+          width: 50,
+          height: 50,
+          child: const Column(
+            children: [
+              Icon(
+                Icons.local_shipping,
+                color: Color(0xFF1565C0),
+                size: 40,
+              ),
+              Text(
+                'Driver',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1565C0),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
+  List<Polyline> _buildPolylines() {
+    final List<Polyline> lines = [];
+    final status = _orderData?['status'] as String?;
+
+    if (status == 'pickingUp' && _decodedStoreRoute.isNotEmpty) {
+      lines.add(Polyline(
+        points: _decodedStoreRoute,
+        color: const Color(0xFF1565C0),
+        strokeWidth: 5,
+      ));
+    } else if ((status == 'pickedUp' || status == 'delivering') && _decodedDestRoute.isNotEmpty) {
+      lines.add(Polyline(
+        points: _decodedDestRoute,
+        color: const Color(0xFFE53935),
+        strokeWidth: 5,
+      ));
+    }
+
+    return lines;
   }
 
   @override
@@ -122,6 +342,52 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
             Navigator.popUntil(context, (route) => route.isFirst);
           },
         ),
+        actions: [
+          if (widget.orderId != null)
+            IconButton(
+              icon: const Icon(Icons.chat),
+              onPressed: () async {
+                final customerId = _orderData?['customerId'] as int?;
+                final driverId = _orderData?['driver']?['id'];
+                debugPrint('[Chat] orderData keys: ${_orderData?.keys.toList()}');
+                debugPrint('[Chat] driver: ${_orderData?['driver']}');
+                if (customerId == null) {
+                  debugPrint('[Chat] customerId is null, cannot open chat');
+                  return;
+                }
+                if (driverId == null) {
+                  debugPrint('[Chat] driverId is null, cannot open chat');
+                  return;
+                }
+
+                try {
+                  final response = await ApiService.post('/chat/order/${widget.orderId}', {
+                    'customerId': customerId,
+                    'driverId': driverId,
+                  });
+
+                  debugPrint('[Chat] Response: $response');
+
+                  if (mounted && response != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatRoomPage(
+                          conversationId: response['id'],
+                          orderId: widget.orderId!,
+                          customerId: customerId,
+                          driverId: driverId,
+                          userType: 'customer',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('[Chat] Error: $e');
+                }
+              },
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -150,9 +416,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF6C63FF,
-                                ).withValues(alpha: 0.1),
+                                color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -179,22 +443,17 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                                     Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFF6C63FF,
-                                        ).withValues(alpha: 0.1),
+                                        color: const Color(0xFF6C63FF).withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
                                               CircleAvatar(
                                                 radius: 20,
-                                                backgroundColor: const Color(
-                                                  0xFF6C63FF,
-                                                ),
+                                                backgroundColor: const Color(0xFF6C63FF),
                                                 child: Text(
                                                   _orderData!['driver']['name']
                                                           ?.toString()
@@ -209,20 +468,16 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      _orderData!['driver']['name'] ??
-                                                          'Driver',
+                                                      _orderData!['driver']['name'] ?? 'Driver',
                                                       style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
+                                                        fontWeight: FontWeight.bold,
                                                         fontSize: 15,
                                                       ),
                                                     ),
-                                                    if (_orderData!['driver']['phone'] !=
-                                                            null &&
+                                                    if (_orderData!['driver']['phone'] != null &&
                                                         _orderData!['driver']['phone']
                                                             .toString()
                                                             .isNotEmpty)
@@ -230,8 +485,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                                                         '📱 ${_orderData!['driver']['phone']}',
                                                         style: TextStyle(
                                                           fontSize: 12,
-                                                          color:
-                                                              Colors.grey[600],
+                                                          color: Colors.grey[600],
                                                         ),
                                                       ),
                                                   ],
@@ -239,22 +493,19 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                                               ),
                                             ],
                                           ),
-                                          if (_orderData!['driver']['vehiclePlate'] !=
-                                                  null &&
+                                          if (_orderData!['driver']['vehiclePlate'] != null &&
                                               _orderData!['driver']['vehiclePlate']
                                                   .toString()
                                                   .isNotEmpty) ...[
                                             const SizedBox(height: 8),
                                             Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 10,
-                                                    vertical: 6,
-                                                  ),
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 6,
+                                              ),
                                               decoration: BoxDecoration(
                                                 color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
+                                                borderRadius: BorderRadius.circular(8),
                                               ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
@@ -268,33 +519,17 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                                                   Text(
                                                     '${_orderData!['driver']['vehiclePlate']}',
                                                     style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
+                                                      fontWeight: FontWeight.bold,
                                                       fontSize: 13,
                                                     ),
                                                   ),
-                                                  if (_orderData!['driver']['vehicleBrand'] !=
-                                                          null &&
+                                                  if (_orderData!['driver']['vehicleBrand'] != null &&
                                                       _orderData!['driver']['vehicleBrand']
                                                           .toString()
                                                           .isNotEmpty) ...[
                                                     const Text(' - '),
                                                     Text(
                                                       '${_orderData!['driver']['vehicleBrand']}',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey[600],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                  if (_orderData!['driver']['vehicleColor'] !=
-                                                          null &&
-                                                      _orderData!['driver']['vehicleColor']
-                                                          .toString()
-                                                          .isNotEmpty) ...[
-                                                    const Text(' - '),
-                                                    Text(
-                                                      '${_orderData!['driver']['vehicleColor']}',
                                                       style: TextStyle(
                                                         fontSize: 12,
                                                         color: Colors.grey[600],
@@ -318,13 +553,13 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                     ),
                   ),
 
-                  // Map Placeholder (only show when delivering)
-                  if (_orderData != null)
-                    Container(
-                      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                  // Map Card
+                  Container(
+                    margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_orderData != null) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
@@ -332,7 +567,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              'DEBUG: status="${_orderData!['status']}"',
+                              'Status: ${_orderData!['status']}',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.orange[800],
@@ -340,13 +575,109 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          _MapPlaceholder(
-                            onMapTap: () {},
-                          ),
                         ],
-                      ),
+                        const SizedBox(height: 6),
+                        Container(
+                          height: 250,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Stack(
+                            children: [
+                              FlutterMap(
+                                key: ValueKey('map_${_decodedDestRoute.length}_${_decodedStoreRoute.length}'),
+                                mapController: _mapController,
+                                options: MapOptions(
+                                  initialCenter: _mapCenter ?? const LatLng(-6.2088, 106.8456),
+                                  initialZoom: 14,
+                                ),
+                                children: [
+                                  TileLayer(
+                                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                    userAgentPackageName: 'com.kelun.app',
+                                  ),
+                                  MarkerLayer(markers: _markers),
+                                  PolylineLayer(polylines: _buildPolylines()),
+                                ],
+                              ),
+                              if (_isGeocoding)
+                                const Positioned(
+                                  top: 12,
+                                  left: 12,
+                                  child: Card(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(8),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('Memuat lokasi...'),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              Positioned(
+                                bottom: 12,
+                                left: 12,
+                                right: 12,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.1),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      if (_driverLat != null)
+                                        Text(
+                                          'Driver: ${_driverLat!.toStringAsFixed(4)}, ${_driverLng!.toStringAsFixed(4)}',
+                                          style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                                        )
+                                      else
+                                        const Text(
+                                          'Driver: -',
+                                          style: TextStyle(fontSize: 10),
+                                        ),
+                                      if (_customerLat != null)
+                                        Text(
+                                          'Anda: ${_customerLat!.toStringAsFixed(4)}, ${_customerLng!.toStringAsFixed(4)}',
+                                          style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                                        )
+                                      else
+                                        const Text(
+                                          'Anda: -',
+                                          style: TextStyle(fontSize: 10),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
 
                   // Progress Steps
                   Container(
@@ -538,327 +869,4 @@ class _DetailRow extends StatelessWidget {
       ),
     );
   }
-}
-
-// --- Map Placeholder Widget ---
-class _MapPlaceholder extends StatefulWidget {
-  final VoidCallback? onMapTap;
-
-  const _MapPlaceholder({this.onMapTap});
-
-  @override
-  State<_MapPlaceholder> createState() => _MapPlaceholderState();
-}
-
-class _MapPlaceholderState extends State<_MapPlaceholder> {
-  double _progress = 0.3;
-  int _estimatedMinutes = 15;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _startAnimation();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _startAnimation() {
-    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        _progress = (_progress + 0.02).clamp(0.0, 1.0);
-        _estimatedMinutes = max(1, (25 * (1 - _progress)).round());
-      });
-      if (_progress >= 1.0) {
-        timer.cancel();
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onMapTap,
-      child: Container(
-        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-        height: 180,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE8F0FE),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            children: [
-              CustomPaint(
-                painter: _CustomerMapPainter(progress: _progress),
-                size: Size.infinite,
-              ),
-              Positioned(
-                top: 12,
-                left: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: Color(0xFF1565C0),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'ETA $_estimatedMinutes menit',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: Color(0xFF1565C0),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 5,
-                  color: Colors.grey[200],
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: _progress,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const Positioned(
-                bottom: 12,
-                right: 12,
-                child: Text(
-                  'Peta sedang dalam pengembangan',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF1565C0),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- Map Painter for Customer Side ---
-class _CustomerMapPainter extends CustomPainter {
-  final double progress;
-
-  _CustomerMapPainter({required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Background
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, w, h),
-      Paint()..color = const Color(0xFFE8F0FE),
-    );
-
-    // Grid
-    final gridPaint = Paint()
-      ..color = const Color(0xFFD0D8E8)
-      ..strokeWidth = 0.5;
-
-    for (double x = 0; x < w; x += 40) {
-      canvas.drawLine(Offset(x, 0), Offset(x, h), gridPaint);
-    }
-    for (double y = 0; y < h; y += 40) {
-      canvas.drawLine(Offset(0, y), Offset(w, y), gridPaint);
-    }
-
-    // Roads
-    final roadPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 14
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawLine(Offset(0, h * 0.35), Offset(w, h * 0.35), roadPaint);
-    canvas.drawLine(Offset(0, h * 0.65), Offset(w, h * 0.65), roadPaint);
-    canvas.drawLine(Offset(w * 0.3, 0), Offset(w * 0.3, h), roadPaint);
-    canvas.drawLine(Offset(w * 0.7, 0), Offset(w * 0.7, h), roadPaint);
-
-    // Route points
-    final startX = w * 0.2;
-    final startY = h * 0.35;
-    final endX = w * 0.8;
-    final endY = h * 0.65;
-
-    // Route line (pending portion - gray)
-    final routePaint = Paint()
-      ..color = const Color(0xFF9E9E9E)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    final routePath = Path()
-      ..moveTo(startX, startY)
-      ..lineTo(w * 0.3, startY)
-      ..lineTo(w * 0.3, endY)
-      ..lineTo(w * 0.7, endY)
-      ..lineTo(endX, endY);
-
-    canvas.drawPath(routePath, routePaint);
-
-    // Completed portion (blue)
-    final completedPaint = Paint()
-      ..color = const Color(0xFF42A5F5)
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    // Calculate driver position
-    final segments = [
-      [Offset(startX, startY), Offset(w * 0.3, startY)],
-      [Offset(w * 0.3, startY), Offset(w * 0.3, endY)],
-      [Offset(w * 0.3, endY), Offset(w * 0.7, endY)],
-      [Offset(w * 0.7, endY), Offset(endX, endY)],
-    ];
-
-    double totalLen = 0;
-    final segLens = <double>[];
-    for (final seg in segments) {
-      final len = (seg[1] - seg[0]).distance;
-      segLens.add(len);
-      totalLen += len;
-    }
-
-    final targetDist = progress * totalLen;
-    double accumulated = 0;
-    Offset driverPos = Offset(startX, startY);
-
-    for (int i = 0; i < segments.length; i++) {
-      if (accumulated + segLens[i] >= targetDist) {
-        final remain = targetDist - accumulated;
-        final t = remain / segLens[i];
-        driverPos = Offset.lerp(segments[i][0], segments[i][1], t)!;
-        break;
-      }
-      accumulated += segLens[i];
-      if (i == segments.length - 1) driverPos = segments[i][1];
-    }
-
-    // Draw completed route
-    final completedPath = Path()..moveTo(startX, startY);
-    accumulated = 0;
-    for (int i = 0; i < segments.length; i++) {
-      if (accumulated + segLens[i] >= targetDist) {
-        final remain = targetDist - accumulated;
-        final t = remain / segLens[i];
-        final pt = Offset.lerp(segments[i][0], segments[i][1], t)!;
-        completedPath.lineTo(pt.dx, pt.dy);
-        break;
-      }
-      completedPath.lineTo(segments[i][1].dx, segments[i][1].dy);
-      accumulated += segLens[i];
-    }
-    canvas.drawPath(completedPath, completedPaint);
-
-    // Driver marker (start point - blue)
-    canvas.drawCircle(
-      Offset(startX, startY),
-      10,
-      Paint()..color = const Color(0xFF1565C0),
-    );
-    canvas.drawCircle(Offset(startX, startY), 5, Paint()..color = Colors.white);
-
-    // Customer marker (end point - red)
-    canvas.drawCircle(
-      Offset(endX, endY),
-      10,
-      Paint()..color = const Color(0xFFE53935),
-    );
-    canvas.drawCircle(Offset(endX, endY), 5, Paint()..color = Colors.white);
-
-    // Driver moving marker
-    canvas.drawCircle(
-      driverPos,
-      14,
-      Paint()..color = const Color(0xFF1565C0).withValues(alpha: 0.2),
-    );
-    canvas.drawCircle(driverPos, 8, Paint()..color = const Color(0xFF1565C0));
-    canvas.drawCircle(driverPos, 3, Paint()..color = Colors.white);
-
-    // Labels
-    final driverLabel = TextPainter(
-      text: const TextSpan(
-        text: ' Driver ',
-        style: TextStyle(
-          color: Color(0xFF1565C0),
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          backgroundColor: Colors.white,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    driverLabel.paint(canvas, Offset(startX - driverLabel.width / 2, startY - 24));
-
-    final customerLabel = TextPainter(
-      text: const TextSpan(
-        text: ' Anda ',
-        style: TextStyle(
-          color: Color(0xFFE53935),
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          backgroundColor: Colors.white,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    customerLabel.paint(canvas, Offset(endX - customerLabel.width / 2, endY - 24));
-  }
-
-  @override
-  bool shouldRepaint(covariant _CustomerMapPainter old) =>
-      old.progress != progress;
 }

@@ -1,14 +1,17 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
   static const String supabaseUrl = 'https://bqbjtvdaajyzjxwkbhxj.supabase.co';
-  static const String supabaseAnonKey = 'sb_publishable_GrEfXg3y0auXH-mkgk6iNg_9CdhoHAL';
+  static const String supabaseAnonKey =
+      'sb_publishable_GrEfXg3y0auXH-mkgk6iNg_9CdhoHAL';
 
-  static final SupabaseClient client = SupabaseClient(supabaseUrl, supabaseAnonKey);
+  static final SupabaseClient client = SupabaseClient(
+    supabaseUrl,
+    supabaseAnonKey,
+  );
 
   static Future<String?> uploadDeliveryPhoto(String filePath) async {
     try {
@@ -22,12 +25,16 @@ class SupabaseService {
         debugPrint('[SupabaseService] Using web upload method');
         final response = await http.get(Uri.parse(filePath));
         fileBytes = response.bodyBytes;
-        debugPrint('[SupabaseService] Web fetch successful, bytes length: ${fileBytes.length}');
+        debugPrint(
+          '[SupabaseService] Web fetch successful, bytes length: ${fileBytes.length}',
+        );
       } else {
         // Mobile: Read file from path
         debugPrint('[SupabaseService] Using mobile file method');
         fileBytes = await File(filePath).readAsBytes();
-        debugPrint('[SupabaseService] Mobile file read successful, bytes length: ${fileBytes.length}');
+        debugPrint(
+          '[SupabaseService] Mobile file read successful, bytes length: ${fileBytes.length}',
+        );
       }
 
       // Create unique filename
@@ -35,7 +42,9 @@ class SupabaseService {
       final extension = _getExtension(filePath);
       final fileName = '$timestamp$extension';
 
-      debugPrint('[SupabaseService] Uploading to Supabase with filename: $fileName');
+      debugPrint(
+        '[SupabaseService] Uploading to Supabase with filename: $fileName',
+      );
 
       // Upload to Supabase
       final response = await client.storage
@@ -44,12 +53,12 @@ class SupabaseService {
 
       debugPrint('[SupabaseService] Upload response: $response');
 
-      if (response != null) {
-        // Get public URL
-        final publicUrl = client.storage.from('delivery-photos').getPublicUrl(fileName);
-        debugPrint('[SupabaseService] Public URL: $publicUrl');
-        return publicUrl;
-      }
+      // Get public URL
+      final publicUrl = client.storage
+          .from('delivery-photos')
+          .getPublicUrl(fileName);
+      debugPrint('[SupabaseService] Public URL: $publicUrl');
+      return publicUrl;
 
       return null;
     } catch (e) {
