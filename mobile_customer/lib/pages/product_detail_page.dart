@@ -434,20 +434,6 @@ class ProductDetailPage extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.star,
-                        color: Color(0xFFFFC107),
-                        size: 18,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        product.rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
                       Text(
                         '${product.sold} terjual',
                         style: TextStyle(color: Colors.grey[600], fontSize: 13),

@@ -33,6 +33,7 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
   double? _deliveryLng;
 
   bool _isLoadingLocation = true;
+  bool _isCalculatingRoute = false;
   int _estimatedMinutes = 25;
   Timer? _locationTimer;
   String? _routeToStore;
@@ -275,13 +276,21 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
         });
         _calculateETA();
 
-        // Send location with orderId via WebSocket for real-time route updates
+        // Send location with orderId via WebSocket for real-time route updates.
+        // IMPORTANT: prefer the snapped-to-road position so the customer sees the
+        // driver marker on the road, not off-road. Fall back to raw GPS only if
+        // snap-to-road failed.
         if (widget.order.apiId != null) {
+          final latToSend = _snappedDriverLat ?? position.latitude;
+          final lngToSend = _snappedDriverLng ?? position.longitude;
           WebSocketService.instance.sendLocationUpdate(
             driverId: widget.order.driverId ?? 0,
-            lat: position.latitude,
-            lng: position.longitude,
+            lat: latToSend,
+            lng: lngToSend,
             orderId: widget.order.apiId,
+          );
+          debugPrint(
+            '[DeliveryMapPage] Sent location to backend: ${latToSend.toStringAsFixed(6)}, ${lngToSend.toStringAsFixed(6)} (snapped=${_snappedDriverLat != null})',
           );
         }
 
@@ -302,6 +311,9 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
       return;
     }
     if (_snappedDriverLat == null || _snappedDriverLng == null) return;
+
+    if (!mounted) return;
+    setState(() => _isCalculatingRoute = true);
 
     // For pickingUp status, we calculate route to store
     // For delivering/pickedUp status, we calculate route to destination
@@ -332,6 +344,19 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
           final newRouteToStore = routes['routeToStore'] as String?;
           final newRouteToDest = routes['routeToDestination'] as String?;
 
+          // Backend may have snap-to-road'd our driver position. Adopt that
+          // snapped position so the polyline and customer-side marker stay
+          // consistent with what the server computed.
+          final serverSnappedLat = updateResult['snappedDriverLat'] as num?;
+          final serverSnappedLng = updateResult['snappedDriverLng'] as num?;
+          if (serverSnappedLat != null && serverSnappedLng != null) {
+            _snappedDriverLat = serverSnappedLat.toDouble();
+            _snappedDriverLng = serverSnappedLng.toDouble();
+            debugPrint(
+              '[DeliveryMapPage] Using server-snapped position: $_snappedDriverLat, $_snappedDriverLng',
+            );
+          }
+
           if (newRouteToStore != null && newRouteToStore.isNotEmpty) {
             _routeToStore = newRouteToStore;
             _decodedStoreRoute = _decodePolyline(newRouteToStore);
@@ -344,6 +369,9 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
           }
         });
       }
+    }
+    if (mounted) {
+      setState(() => _isCalculatingRoute = false);
     }
   }
 
@@ -523,6 +551,9 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
       debugPrint(
         '[DeliveryMapPage] Status is pickingUp, decodedStoreRoute length: ${_decodedStoreRoute.length}',
       );
+      // Only draw the polyline if we have a proper route (not a straight-line fallback).
+      // When route is empty, the OSRM call probably failed — leave lines empty so the map
+      // just shows markers. A "Loading..." chip is already shown in the UI.
       if (_decodedStoreRoute.isNotEmpty &&
           _driverLat != null &&
           _driverLng != null) {
@@ -548,22 +579,9 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
             ),
           );
         }
-      } else if (_driverLat != null &&
-          _pickupLat != null &&
-          _pickupLat != 0.0 &&
-          _pickupLng != null &&
-          _pickupLng != 0.0) {
-        lines.add(
-          Polyline(
-            points: [
-              LatLng(_driverLat!, _driverLng!),
-              LatLng(_pickupLat!, _pickupLng!),
-            ],
-            color: const Color(0xFF1565C0),
-            strokeWidth: 4,
-          ),
-        );
       }
+      // NOTE: No fallback straight line. Without a real route, we just show the
+      // driver marker + pickup/store marker and the "Calculating route..." chip.
     } else {
       debugPrint(
         '[DeliveryMapPage] Status is NOT pickingUp (pickedUp/delivering), decodedDestRoute length: ${_decodedDestRoute.length}',
@@ -593,22 +611,8 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
             ),
           );
         }
-      } else if (_driverLat != null &&
-          _deliveryLat != null &&
-          _deliveryLat != 0.0 &&
-          _deliveryLng != null &&
-          _deliveryLng != 0.0) {
-        lines.add(
-          Polyline(
-            points: [
-              LatLng(_driverLat!, _driverLng!),
-              LatLng(_deliveryLat!, _deliveryLng!),
-            ],
-            color: const Color(0xFFE53935),
-            strokeWidth: 4,
-          ),
-        );
       }
+      // NOTE: No fallback straight line. Same rationale as above.
     }
 
     debugPrint(
@@ -736,6 +740,46 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
                     top: 16,
                     right: 16,
                     child: CircularProgressIndicator(),
+                  ),
+
+                // Calculating route indicator
+                if (_isCalculatingRoute && !_isLoadingLocation)
+                  const Positioned(
+                    top: 16,
+                    right: 16,
+                    child: Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF1565C0),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Menghitung rute…',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1565C0),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
 
                 // Store info chip

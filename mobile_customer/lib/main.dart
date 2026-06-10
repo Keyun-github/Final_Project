@@ -609,23 +609,8 @@ class _ProductCard extends StatelessWidget {
                     ),
                     Row(
                       children: [
-                        const Icon(
-                          Icons.star,
-                          color: Color(0xFFFFC107),
-                          size: 13,
-                        ),
-                        const SizedBox(width: 2),
                         Text(
-                          product.rating.toStringAsFixed(1),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '| ${_formatSold(product.sold)} terjual',
+                          '${_formatSold(product.sold)} terjual',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[500],

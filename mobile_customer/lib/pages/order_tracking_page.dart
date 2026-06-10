@@ -36,6 +36,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   final NominatimService _nominatimService = NominatimService();
   final MapController _mapController = MapController();
   StreamSubscription? _driverLocationSubscription;
+  StreamSubscription? _routeUpdateSubscription;
 
   double? _driverLat;
   double? _driverLng;
@@ -99,8 +100,49 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
           _driverLat = (data['lat'] as num?)?.toDouble();
           _driverLng = (data['lng'] as num?)?.toDouble();
         });
+        // Fallback: still fetch routes via REST in case the WebSocket route_update
+        // event isn't being received (e.g. older backend). The WebSocket path
+        // below updates polyline directly and is preferred.
         _fetchRoutes();
       }
+    });
+
+    // Preferred path: server pushes a fresh polyline with every location update,
+    // so we don't need to make an extra REST call.
+    _routeUpdateSubscription = SocketService.instance.routeUpdates.listen((data) {
+      if (!mounted) return;
+      if (widget.orderId != null && data['orderId'] != null && data['orderId'] != widget.orderId) {
+        return; // Not for this order
+      }
+      debugPrint('[OrderTracking] route_update received: status=${data['status']}');
+      setState(() {
+        // Update driver position with the server-snapped coords if available.
+        if (data['snappedDriverLat'] != null && data['snappedDriverLng'] != null) {
+          _driverLat = (data['snappedDriverLat'] as num).toDouble();
+          _driverLng = (data['snappedDriverLng'] as num).toDouble();
+        } else if (data['driverLat'] != null && data['driverLng'] != null) {
+          _driverLat = (data['driverLat'] as num).toDouble();
+          _driverLng = (data['driverLng'] as num).toDouble();
+        }
+
+        // Update polylines from the broadcast.
+        final newRouteToStore = data['routeToStore'] as String?;
+        final newRouteToDest = data['routeToDestination'] as String?;
+        if (newRouteToStore != null && newRouteToStore.isNotEmpty) {
+          _routeToStore = newRouteToStore;
+          _decodedStoreRoute = _decodePolyline(newRouteToStore);
+        } else {
+          _routeToStore = null;
+          _decodedStoreRoute = [];
+        }
+        if (newRouteToDest != null && newRouteToDest.isNotEmpty) {
+          _routeToDestination = newRouteToDest;
+          _decodedDestRoute = _decodePolyline(newRouteToDest);
+        } else {
+          _routeToDestination = null;
+          _decodedDestRoute = [];
+        }
+      });
     });
 
     if (widget.orderId != null) {
@@ -226,6 +268,7 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   void dispose() {
     _refreshTimer?.cancel();
     _driverLocationSubscription?.cancel();
+    _routeUpdateSubscription?.cancel();
     if (widget.orderId != null) {
       SocketService.instance.unsubscribeFromOrder(widget.orderId!);
     }
@@ -308,20 +351,93 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
     final status = _orderData?['status'] as String?;
 
     if (status == 'pickingUp' && _decodedStoreRoute.isNotEmpty) {
-      lines.add(Polyline(
-        points: _decodedStoreRoute,
-        color: const Color(0xFF1565C0),
-        strokeWidth: 5,
-      ));
-    } else if ((status == 'pickedUp' || status == 'delivering') && _decodedDestRoute.isNotEmpty) {
-      lines.add(Polyline(
-        points: _decodedDestRoute,
-        color: const Color(0xFFE53935),
-        strokeWidth: 5,
-      ));
+      if (_driverLat != null && _driverLng != null) {
+        final split = _splitRouteAtDriver(
+          _decodedStoreRoute,
+          LatLng(_driverLat!, _driverLng!),
+        );
+        if (split['traveled']!.isNotEmpty) {
+          lines.add(Polyline(
+            points: split['traveled']!,
+            color: const Color(0xFF43A047),
+            strokeWidth: 5,
+          ));
+        }
+        if (split['remaining']!.isNotEmpty) {
+          lines.add(Polyline(
+            points: split['remaining']!,
+            color: const Color(0xFF1565C0),
+            strokeWidth: 5,
+          ));
+        }
+      } else {
+        // No driver position yet — show full route in single color.
+        lines.add(Polyline(
+          points: _decodedStoreRoute,
+          color: const Color(0xFF1565C0),
+          strokeWidth: 5,
+        ));
+      }
+    } else if ((status == 'pickedUp' || status == 'delivering') &&
+        _decodedDestRoute.isNotEmpty) {
+      if (_driverLat != null && _driverLng != null) {
+        final split = _splitRouteAtDriver(
+          _decodedDestRoute,
+          LatLng(_driverLat!, _driverLng!),
+        );
+        if (split['traveled']!.isNotEmpty) {
+          lines.add(Polyline(
+            points: split['traveled']!,
+            color: const Color(0xFF43A047),
+            strokeWidth: 5,
+          ));
+        }
+        if (split['remaining']!.isNotEmpty) {
+          lines.add(Polyline(
+            points: split['remaining']!,
+            color: const Color(0xFFE53935),
+            strokeWidth: 5,
+          ));
+        }
+      } else {
+        lines.add(Polyline(
+          points: _decodedDestRoute,
+          color: const Color(0xFFE53935),
+          strokeWidth: 5,
+        ));
+      }
     }
 
     return lines;
+  }
+
+  /// Splits [route] into the segment the driver has already traveled and the
+  /// segment still ahead, based on which point on the route is closest to
+  /// [driverPos].
+  Map<String, List<LatLng>> _splitRouteAtDriver(
+    List<LatLng> route,
+    LatLng driverPos,
+  ) {
+    double minDist = double.infinity;
+    int closestIdx = 0;
+    for (int i = 0; i < route.length; i++) {
+      final d = _distance(route[i], driverPos);
+      if (d < minDist) {
+        minDist = d;
+        closestIdx = i;
+      }
+    }
+
+    final traveled = route.sublist(0, closestIdx + 1);
+    final remaining = route.sublist(closestIdx);
+
+    return {'traveled': traveled, 'remaining': remaining};
+  }
+
+  double _distance(LatLng a, LatLng b) {
+    final dLat = a.latitude - b.latitude;
+    final dLng = a.longitude - b.longitude;
+    return dLat * dLat + dLng * dLng;
   }
 
   @override

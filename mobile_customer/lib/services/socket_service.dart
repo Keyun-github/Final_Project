@@ -10,7 +10,13 @@ class SocketService {
   final StreamController<Map<String, dynamic>> _driverLocationController =
       StreamController<Map<String, dynamic>>.broadcast();
 
-  Stream<Map<String, dynamic>> get driverLocationUpdates => _driverLocationController.stream;
+  final StreamController<Map<String, dynamic>> _routeUpdateController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get driverLocationUpdates =>
+      _driverLocationController.stream;
+
+  Stream<Map<String, dynamic>> get routeUpdates => _routeUpdateController.stream;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -30,7 +36,10 @@ class SocketService {
       return;
     }
 
-    final wsUrl = 'http://localhost:3000/driver-location';
+    // Prefer the same API URL the rest of the app uses; fall back to
+    // localhost:3000 for local dev.
+    final baseWs = _resolveBaseWs();
+    final wsUrl = '$baseWs/driver-location';
     debugPrint('[SocketService] Connecting to $wsUrl');
 
     _socket = io.io(wsUrl, <String, dynamic>{
@@ -63,7 +72,32 @@ class SocketService {
       }
     });
 
+    _socket!.on('route_update', (data) {
+      debugPrint('[SocketService] route_update: $data');
+      if (data is Map<String, dynamic>) {
+        _routeUpdateController.add(data);
+      }
+    });
+
     _socket!.connect();
+  }
+
+  /// Resolve the base URL for the WebSocket connection. In production the
+  /// customer app will be configured via --dart-define=API_URL=..., but for
+  /// dev convenience we fall back to localhost.
+  String _resolveBaseWs() {
+    const fromEnv = String.fromEnvironment('API_URL', defaultValue: '');
+    if (fromEnv.isNotEmpty) {
+      // Convert http(s):// → ws(s):// so socket_io_client accepts it.
+      if (fromEnv.startsWith('https://')) {
+        return fromEnv.replaceFirst('https://', 'wss://');
+      }
+      if (fromEnv.startsWith('http://')) {
+        return fromEnv.replaceFirst('http://', 'ws://');
+      }
+      return fromEnv;
+    }
+    return 'http://localhost:3000';
   }
 
   void subscribeToOrder(int orderId) {
