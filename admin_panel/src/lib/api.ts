@@ -4,19 +4,10 @@ const BASE_URL =
     (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') ||
     'https://api-kelun.ngelantour.cloud';
 
-let currentAbortController: AbortController | null = null;
-
 async function request(path: string, options?: RequestInit) {
-    if (currentAbortController) {
-        currentAbortController.abort();
-    }
-    currentAbortController = new AbortController();
-    const signal = currentAbortController.signal;
-
     try {
         const res = await fetch(`${BASE_URL}${path}`, {
             headers: { 'Content-Type': 'application/json', ...options?.headers },
-            signal,
             ...options,
         });
         if (!res.ok) {
