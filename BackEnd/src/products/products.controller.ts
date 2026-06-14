@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Res,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -20,15 +21,23 @@ import { existsSync, mkdirSync } from 'fs';
 import type { Response } from 'express';
 import { ProductsService } from './products.service.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
+import { SupabaseService } from '../supabase/supabase.service.js';
 
 const uploadDir = join(process.cwd(), 'uploads');
 if (!existsSync(uploadDir)) {
   mkdirSync(uploadDir, { recursive: true });
 }
 
+const PRODUCT_BUCKET = 'product-images';
+
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  private readonly logger = new Logger(ProductsController.name);
+
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly supabaseService: SupabaseService,
+  ) {}
 
   @Get()
   findAll() {
@@ -98,10 +107,26 @@ export class ProductsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, any>,
   ) {
-    const publicBase = (process.env.PUBLIC_URL || 'http://localhost:3000').replace(/\/+$/, '');
-    const imageUrl = file
-      ? `${publicBase}/products/uploads/${file.filename}`
-      : body.imageUrl || '';
+    let imageUrl = body.imageUrl || '';
+
+    if (file) {
+      // Try Supabase upload first; fall back to local URL if not configured.
+      const supabaseUrl = await this.uploadToSupabase(file);
+      if (supabaseUrl) {
+        imageUrl = supabaseUrl;
+        this.logger.log(
+          `[create] Uploaded ${file.filename} to Supabase: ${supabaseUrl}`,
+        );
+      } else {
+        const publicBase = (
+          process.env.PUBLIC_URL || 'http://localhost:3000'
+        ).replace(/\/+$/, '');
+        imageUrl = `${publicBase}/products/uploads/${file.filename}`;
+        this.logger.warn(
+          `[create] Supabase upload failed for ${file.filename}; falling back to local URL`,
+        );
+      }
+    }
 
     const dto: CreateProductDto = {
       name: body.name,
@@ -142,8 +167,6 @@ export class ProductsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, any>,
   ) {
-    const publicBase = (process.env.PUBLIC_URL || 'http://localhost:3000').replace(/\/+$/, '');
-
     const dto: Partial<CreateProductDto> = {};
 
     if (body.name !== undefined) dto.name = body.name;
@@ -158,7 +181,21 @@ export class ProductsController {
     if (body.sellerCity !== undefined) dto.sellerCity = body.sellerCity;
 
     if (file) {
-      dto.imageUrl = `${publicBase}/products/uploads/${file.filename}`;
+      const supabaseUrl = await this.uploadToSupabase(file);
+      if (supabaseUrl) {
+        dto.imageUrl = supabaseUrl;
+        this.logger.log(
+          `[update] Uploaded ${file.filename} to Supabase: ${supabaseUrl}`,
+        );
+      } else {
+        const publicBase = (
+          process.env.PUBLIC_URL || 'http://localhost:3000'
+        ).replace(/\/+$/, '');
+        dto.imageUrl = `${publicBase}/products/uploads/${file.filename}`;
+        this.logger.warn(
+          `[update] Supabase upload failed for ${file.filename}; falling back to local URL`,
+        );
+      }
     }
 
     const product = await this.productsService.update(id, dto);
@@ -171,5 +208,35 @@ export class ProductsController {
     const deleted = await this.productsService.remove(id);
     if (!deleted) throw new NotFoundException('Product not found');
     return { message: 'Product deleted' };
+  }
+
+  /**
+   * Upload an uploaded product image to Supabase Storage. Returns the public
+   * URL on success, or null if Supabase is not configured / upload fails.
+   * The caller should fall back to the local /uploads/ URL in that case.
+   */
+  private async uploadToSupabase(
+    file: Express.Multer.File,
+  ): Promise<string | null> {
+    if (!this.supabaseService.isEnabled()) {
+      return null;
+    }
+    try {
+      const buffer = await import('fs/promises').then((m) =>
+        m.readFile(file.path),
+      );
+      return await this.supabaseService.uploadFile(
+        PRODUCT_BUCKET,
+        file.filename,
+        buffer,
+      );
+    } catch (e) {
+      this.logger.error(
+        `uploadToSupabase failed for ${file.filename}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return null;
+    }
   }
 }

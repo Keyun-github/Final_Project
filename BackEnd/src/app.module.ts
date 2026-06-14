@@ -12,6 +12,7 @@ import { PaymentModule } from './payment/payment.module.js';
 import { SeedService } from './seed/seed.service.js';
 import { DriverLocationModule } from './driver-location/driver-location.module.js';
 import { ChatModule } from './chat/chat.module.js';
+import { SupabaseModule } from './supabase/supabase.module.js';
 import { Product } from './products/product.entity.js';
 import { ProductVariant } from './products/product-variant.entity.js';
 import { Order } from './orders/order.entity.js';
@@ -70,6 +71,7 @@ if (!dbPassword) {
     PaymentModule,
     DriverLocationModule,
     ChatModule,
+    SupabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService, SeedService],
