@@ -1,0 +1,58 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+dist
+build
+coverage
+
+# Local environment files (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+.env.example
+.env.development
+.env.production
+.env.staging
+.env.*
+
+# Logs
+*.log
+backend.log
+logs
+
+# Uploads (will be mounted as volume in Dokploy)
+uploads
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Editor / IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Tests
+test
+tests
+coverage
+*.spec.ts
+*.test.ts
+__tests__
+
+# Documentation (keep in repo but not in image)
+README.md
+*.md
+LICENSE
+.dockerignore
+Dockerfile
+
+# Node-specific
+.eslintcache
+node_modules.bak
