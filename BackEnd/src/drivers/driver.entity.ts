@@ -9,47 +9,62 @@ import {
 @Entity('drivers')
 export class Driver {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ unique: true })
-  username: string;
+  username!: string;
+
 
   @Column()
-  password: string;
+  password!: string;
+
 
   @Column()
-  name: string;
+  name!: string;
+
 
   @Column({ default: '' })
-  phone: string;
+  phone!: string;
+
 
   @Column({ name: 'isActive', default: true })
-  isActive: boolean;
+  isActive!: boolean;
+
 
   @Column({ name: 'vehicleType', default: 'motorcycle' })
-  vehicleType: string;
+  vehicleType!: string;
+
 
   @Column({ name: 'vehicleBrand', default: '' })
-  vehicleBrand: string;
+  vehicleBrand!: string;
+
 
   @Column({ name: 'vehiclePlate', default: '' })
-  vehiclePlate: string;
+  vehiclePlate!: string;
+
 
   @Column({ name: 'vehicleColor', default: '' })
-  vehicleColor: string;
+  vehicleColor!: string;
+
 
   @Column({ name: 'currentLat', type: 'decimal', precision: 10, scale: 7, nullable: true })
-  currentLat: number | null;
+  currentLat!: number | null;
+
 
   @Column({ name: 'currentLng', type: 'decimal', precision: 10, scale: 7, nullable: true })
-  currentLng: number | null;
+  currentLng!: number | null;
+
 
   @Column({ name: 'isAvailable', default: true })
-  isAvailable: boolean;
+  isAvailable!: boolean;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
+
 }

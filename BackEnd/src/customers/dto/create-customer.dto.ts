@@ -3,20 +3,16 @@ import { IsString, IsOptional, IsNotEmpty } from 'class-validator';
 export class CreateCustomerDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
-
+  name!: string;
   @IsString()
   @IsNotEmpty()
-  username: string;
-
+  username!: string;
   @IsString()
   @IsNotEmpty()
-  phone: string;
-
+  phone!: string;
   @IsString()
   @IsNotEmpty()
-  password: string;
-
+  password!: string;
   @IsOptional()
   @IsString()
   address?: string;
@@ -25,9 +21,7 @@ export class CreateCustomerDto {
 export class LoginCustomerDto {
   @IsString()
   @IsNotEmpty()
-  usernameOrPhone: string;
-
+  usernameOrPhone!: string;
   @IsString()
   @IsNotEmpty()
-  password: string;
-}
+  password!: string;}

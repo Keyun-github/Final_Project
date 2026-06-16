@@ -9,15 +9,13 @@ import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
   @IsString()
-  productName: string;
-
+  productName!: string;
   @IsOptional()
   @IsString()
   unitName?: string;
 
   @IsNumber()
-  unitPrice: number;
-
+  unitPrice!: number;
   @IsOptional()
   @IsNumber()
   quantity?: number;
@@ -29,8 +27,7 @@ export class CreateOrderDto {
   customerId?: number;
 
   @IsString()
-  customerName: string;
-
+  customerName!: string;
   @IsOptional()
   @IsString()
   customerPhone?: string;
@@ -44,8 +41,7 @@ export class CreateOrderDto {
   deliveryAddress?: string;
 
   @IsNumber()
-  totalAmount: number;
-
+  totalAmount!: number;
   @IsOptional()
   @IsString()
   paymentMethod?: string;
@@ -53,5 +49,4 @@ export class CreateOrderDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
-  items: CreateOrderItemDto[];
-}
+  items!: CreateOrderItemDto[];}

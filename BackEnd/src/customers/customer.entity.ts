@@ -11,29 +11,38 @@ import { Order } from '../orders/order.entity.js';
 @Entity('customers')
 export class Customer {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column()
-  name: string;
+  name!: string;
+
 
   @Column({ nullable: true, default: '' })
-  username: string;
+  username!: string;
+
 
   @Column({ unique: true })
-  phone: string;
+  phone!: string;
+
 
   @Column()
-  password: string;
+  password!: string;
+
 
   @Column({ default: '' })
-  address: string;
+  address!: string;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
+
 
   @OneToMany(() => Order, (order) => order.customer)
-  orders: Order[];
+  orders!: Order[];
+
 }

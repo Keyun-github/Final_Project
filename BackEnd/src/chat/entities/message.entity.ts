@@ -16,27 +16,35 @@ export enum SenderType {
 @Entity('messages')
 export class Message {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ name: 'conversation_id' })
-  conversationId: number;
+  conversationId!: number;
+
 
   @Column({ name: 'sender_type', type: 'varchar', length: 20 })
-  senderType: SenderType;
+  senderType!: SenderType;
+
 
   @Column({ name: 'sender_id' })
-  senderId: number;
+  senderId!: number;
+
 
   @Column({ type: 'text' })
-  message: string;
+  message!: string;
+
 
   @Column({ name: 'is_read', default: false })
-  isRead: boolean;
+  isRead!: boolean;
+
 
   @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @ManyToOne(() => Conversation, (conversation) => conversation.messages)
   @JoinColumn({ name: 'conversation_id' })
-  conversation: Conversation;
+  conversation!: Conversation;
+
 }

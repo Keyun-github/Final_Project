@@ -16,8 +16,7 @@ import { Product } from './product.entity.js';
 })
 export class ProductsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
-
+  server!: Server;
   handleConnection(client: Socket) {
     console.log(`[ProductsWS] Client connected: ${client.id}`);
   }

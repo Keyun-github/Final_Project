@@ -21,8 +21,7 @@ import { getRouteWithORSAndFallback } from '../utils/openroute.util.js';
 })
 export class DriverLocationGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
-
+  server!: Server;
   constructor(
     private readonly driversService: DriversService,
     private readonly ordersService: OrdersService,

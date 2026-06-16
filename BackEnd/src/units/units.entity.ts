@@ -8,17 +8,22 @@ import {
 @Entity('units')
 export class Unit {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ unique: true, length: 50 })
-  name: string;
+  name!: string;
+
 
   @Column({ name: 'is_default', default: false })
-  isDefault: boolean;
+  isDefault!: boolean;
+
 
   @Column({ name: 'is_active', default: true })
-  isActive: boolean;
+  isActive!: boolean;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 }

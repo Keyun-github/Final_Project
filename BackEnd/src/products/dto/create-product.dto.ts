@@ -11,11 +11,9 @@ import { Type } from 'class-transformer';
 
 export class CreateVariantDto {
   @IsString()
-  unitName: string;
-
+  unitName!: string;
   @IsNumber()
-  price: number;
-
+  price!: number;
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -24,15 +22,13 @@ export class CreateVariantDto {
 
 export class CreateProductDto {
   @IsString()
-  name: string;
-
+  name!: string;
   @IsOptional()
   @IsString()
   description?: string;
 
   @IsNumber()
-  price: number;
-
+  price!: number;
   @IsOptional()
   @IsString()
   imageUrl?: string;

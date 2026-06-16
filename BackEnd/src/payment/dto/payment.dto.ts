@@ -13,14 +13,11 @@ import { Type } from 'class-transformer';
  */
 export class CustomerDetailsDto {
   @IsString()
-  name: string;
-
+  name!: string;
   @IsEmail()
-  email: string;
-
+  email!: string;
   @IsString()
-  phone: string;
-}
+  phone!: string;}
 
 /**
  * Body for POST /payment/snap-token.
@@ -30,11 +27,9 @@ export class CustomerDetailsDto {
  */
 export class CreateSnapTokenDto {
   @IsString()
-  orderId: string;
-
+  orderId!: string;
   @IsNumber()
-  amount: number;
-
+  amount!: number;
   @IsOptional()
   @ValidateNested()
   @Type(() => CustomerDetailsDto)
@@ -62,20 +57,15 @@ export class CreateSnapTokenDto {
  */
 export class MidtransNotificationDto {
   @IsString()
-  order_id: string;
-
+  order_id!: string;
   @IsString()
-  transaction_id: string;
-
+  transaction_id!: string;
   @IsString()
-  transaction_status: string;
-
+  transaction_status!: string;
   @IsString()
-  status_code: string;
-
+  status_code!: string;
   @IsString()
-  gross_amount: string;
-
+  gross_amount!: string;
   @IsOptional()
   @IsString()
   signature_key?: string;

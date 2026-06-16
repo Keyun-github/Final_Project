@@ -9,26 +9,34 @@ import {
 @Entity('time_slots')
 export class TimeSlot {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ name: 'slotTime', length: 10 })
-  slotTime: string;
+  slotTime!: string;
+
 
   @Column({ name: 'slotDate', length: 20 })
-  slotDate: string;
+  slotDate!: string;
+
 
   @Column({ default: 0 })
-  bookings: number;
+  bookings!: number;
+
 
   @Column({ default: 3 })
-  maxBookings: number;
+  maxBookings!: number;
+
 
   @Column({ name: 'isActive', default: true })
-  isActive: boolean;
+  isActive!: boolean;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
+
 }
