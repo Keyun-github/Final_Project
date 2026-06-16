@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Order } from './order.entity.js';
 import { OrderItem } from './order-item.entity.js';
@@ -20,7 +20,7 @@ import { OrdersController } from './orders.controller.js';
       Driver,
     ]),
     DriversModule,
-    PaymentModule,
+    forwardRef(() => PaymentModule),
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

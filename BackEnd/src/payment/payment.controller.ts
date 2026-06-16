@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PaymentService } from './payment.service.js';
 import { OrdersService } from '../orders/orders.service.js';
@@ -23,6 +25,7 @@ class CreateSnapTokenDto {
 export class PaymentController {
   constructor(
     private readonly paymentService: PaymentService,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
   ) {}
 

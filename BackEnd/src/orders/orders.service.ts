@@ -27,6 +27,7 @@ export class OrdersService {
     private readonly driversService: DriversService,
     @Inject(forwardRef(() => DriverLocationGateway))
     private readonly locationGateway: DriverLocationGateway,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
   ) {}
 
