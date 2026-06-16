@@ -1,8 +1,10 @@
 import {
   IsString,
   IsNumber,
+  IsInt,
   IsOptional,
   IsArray,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -13,6 +15,11 @@ export class CreateVariantDto {
 
   @IsNumber()
   price: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  stock?: number;
 }
 
 export class CreateProductDto {

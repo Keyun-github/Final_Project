@@ -22,6 +22,7 @@
         id: number;
         unitName: string;
         price: number;
+        stock: number;
     }
 
     interface StockItem {
@@ -45,6 +46,16 @@
     let newImage = $state<File | null>(null);
     let newImagePreview = $state("");
     let formError = $state("");
+
+    // Per-variant stock inputs (when adding a new product)
+    interface VariantDraft {
+        unitName: string;
+        price: string;
+        stock: string;
+    }
+    let newVariants = $state<VariantDraft[]>([
+        { unitName: "KG", price: "", stock: "" },
+    ]);
 
     // ---- Toast Notification ----
     let toastMessage = $state("");
@@ -141,21 +152,35 @@
         try {
             isLoading = true;
             const products = await fetchProducts();
-            items = products.map((p: any) => ({
-                id: p.id,
-                name: p.name,
-                price: Number(p.price),
-                stock: p.stock ?? 0,
-                unit: p.unit ?? "Piece",
-                leadTime: p.leadTime ?? 3,
-                safetyStock: p.safetyStock ?? 5,
-                sold: p.sold ?? 0,
-                variants: (p.variants ?? []).map((v: any) => ({
+            items = products.map((p: any) => {
+                const variants = (p.variants ?? []).map((v: any) => ({
                     id: v.id,
                     unitName: v.unitName,
                     price: Number(v.price),
-                })),
-            }));
+                    stock: v.stock ?? 0,
+                }));
+                // If the product has variants, the row-level "stock" column
+                // is the sum of all variant stocks so admins can still see a
+                // single "total" number at a glance.
+                const totalStock =
+                    variants.length > 0
+                        ? variants.reduce(
+                              (s: number, v: { stock: number }) => s + v.stock,
+                              0,
+                          )
+                        : (p.stock ?? 0);
+                return {
+                    id: p.id,
+                    name: p.name,
+                    price: Number(p.price),
+                    stock: totalStock,
+                    unit: p.unit ?? "Piece",
+                    leadTime: p.leadTime ?? 3,
+                    safetyStock: p.safetyStock ?? 5,
+                    sold: p.sold ?? 0,
+                    variants,
+                };
+            });
         } catch (e) {
             console.error("Failed to load products:", e);
         } finally {
@@ -218,7 +243,19 @@
         newImage = null;
         newImagePreview = "";
         formError = "";
+        newVariants = [{ unitName: "KG", price: "", stock: "" }];
         showModal = true;
+    }
+
+    function addVariantDraft() {
+        newVariants = [
+            ...newVariants,
+            { unitName: unitOptions[0] ?? "Piece", price: "", stock: "" },
+        ];
+    }
+
+    function removeVariantDraft(idx: number) {
+        newVariants = newVariants.filter((_, i) => i !== idx);
     }
 
     function closeModal() {
@@ -236,45 +273,88 @@
 
     async function addItem() {
         const nameVal = String(newName).trim();
-        const priceVal = String(newPrice).trim();
-        const stockVal = String(newStock).trim();
 
         if (!nameVal) {
             formError = "Item name is required";
             return;
         }
-        if (!priceVal || isNaN(Number(priceVal)) || Number(priceVal) <= 0) {
-            formError = "Valid price is required";
+
+        // Validate every variant row
+        const cleanVariants: {
+            unitName: string;
+            price: number;
+            stock: number;
+        }[] = [];
+        for (let i = 0; i < newVariants.length; i++) {
+            const v = newVariants[i];
+            const unit = v.unitName.trim();
+            const price = Number(String(v.price).trim());
+            const stock = Number(String(v.stock).trim() || "0");
+            if (!unit) {
+                formError = `Variant #${i + 1}: unit wajib dipilih`;
+                return;
+            }
+            if (!v.price || isNaN(price) || price <= 0) {
+                formError = `Variant #${i + 1}: harga harus angka > 0`;
+                return;
+            }
+            if (isNaN(stock) || stock < 0) {
+                formError = `Variant #${i + 1}: stok harus angka ≥ 0`;
+                return;
+            }
+            cleanVariants.push({ unitName: unit, price, stock });
+        }
+
+        if (cleanVariants.length === 0) {
+            formError = "Minimal 1 variant harus diisi";
             return;
         }
-        if (!stockVal || isNaN(Number(stockVal)) || Number(stockVal) < 0) {
-            formError = "Valid stock quantity is required";
-            return;
-        }
+
+        // Keep the legacy single-unit form fields populated so the rest of the
+        // submit pipeline (and the backend dto.stock) still get sensible values
+        // for the *primary* variant. The backend will create a variant from
+        // these and add the rest via the variants array.
+        const first = cleanVariants[0];
+        const primaryPrice = String(first.price);
+        const primaryStock = String(first.stock);
+        const primaryUnit = first.unitName;
 
         try {
-            const result = await createProduct({
-                name: nameVal,
-                price: Number(priceVal),
-                stock: Number(stockVal),
-                unit: newUnit,
-                image: newImage,
-            });
+            // The current API only accepts a single stock/unit per call, so we
+            // sequentially upsert each variant. createProduct handles the
+            // "product already exists" case by adding a new variant row.
+            for (let i = 0; i < cleanVariants.length; i++) {
+                const v = cleanVariants[i];
+                const isLast = i === cleanVariants.length - 1;
+                const result = await createProduct({
+                    name: nameVal,
+                    price: v.price,
+                    stock: v.stock,
+                    unit: v.unitName,
+                    image: isLast ? newImage : null,
+                });
 
-            if (result?.action === "updated") {
-                const newStock = result.product?.stock ?? 0;
-                showToast(
-                    `✅ Stock ditambah & harga diupdate (stok sekarang: ${newStock})`,
-                    "success",
-                );
-            } else {
-                showToast("✅ Produk baru ditambahkan", "success");
+                if (!isLast && result?.action !== "updated") {
+                    // First insert created the product; subsequent calls
+                    // would create a *new* product with the same name. Bail.
+                    throw new Error(
+                        "Gagal menambah variant lanjutan: produk belum ada",
+                    );
+                }
             }
+
+            // Show the total stock summed across all variants
+            const totalStock = cleanVariants.reduce((s, v) => s + v.stock, 0);
+            showToast(
+                `✅ Produk disimpan (${cleanVariants.length} variant, total stok ${totalStock})`,
+                "success",
+            );
 
             await loadProducts();
             closeModal();
-        } catch (e) {
-            formError = "Failed to save item. Please try again.";
+        } catch (e: any) {
+            formError =
+                e?.message ?? "Failed to save item. Please try again.";
             showToast("❌ Gagal menyimpan produk", "error");
         }
     }
@@ -408,7 +488,9 @@
                                 {#if item.variants.length > 0}
                                     <div class="variant-badges">
                                         {#each item.variants as variant}
-                                            <span class="variant-badge">{variant.unitName}</span>
+                                            <span class="variant-badge">
+                                                {variant.unitName}: {variant.stock}
+                                            </span>
                                         {/each}
                                     </div>
                                 {/if}
@@ -417,14 +499,21 @@
                     </td>
                     <td class="col-price">{formatRupiah(item.price)}</td>
                     <td>
-                        <span
-                            class="stock-badge"
-                            class:low={item.stock <= 20}
-                            class:medium={item.stock > 20 && item.stock <= 50}
-                            class:high={item.stock > 50}
-                        >
-                            {item.stock}
-                        </span>
+                        <div class="stock-cell">
+                            <span
+                                class="stock-badge"
+                                class:low={item.stock <= 20}
+                                class:medium={item.stock > 20 && item.stock <= 50}
+                                class:high={item.stock > 50}
+                            >
+                                {item.stock}
+                            </span>
+                            {#if item.variants.length > 0}
+                                <span class="stock-hint">
+                                    ({item.variants.length} variant)
+                                </span>
+                            {/if}
+                        </div>
                     </td>
                     <td><span class="unit-badge">{item.unit}</span></td>
                     <td>
@@ -558,25 +647,57 @@
                         bind:value={newPrice}
                     />
                 </div>
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label for="item-stock">Stock</label>
-                        <input
-                            id="item-stock"
-                            type="text"
-                            inputmode="numeric"
-                            placeholder="e.g. 100"
-                            bind:value={newStock}
-                        />
+                <div class="form-group">
+                    <label>Variants (Unit, Price, Stock)</label>
+                    <p class="form-hint">
+                        Setiap variant punya stok sendiri. Mis. Aqua Galon bisa
+                        punya unit "Piece" stok 60 dan "Galon" stok 30 — keduanya
+                        tidak tercampur.
+                    </p>
+                    <div class="variant-drafts">
+                        {#each newVariants as variant, idx (idx)}
+                            <div class="variant-draft-row">
+                                <select
+                                    bind:value={variant.unitName}
+                                    aria-label="Unit {idx + 1}"
+                                >
+                                    {#each unitOptions as opt}
+                                        <option value={opt}>{opt}</option>
+                                    {/each}
+                                </select>
+                                <input
+                                    type="text"
+                                    inputmode="numeric"
+                                    placeholder="Harga"
+                                    bind:value={variant.price}
+                                    aria-label="Price for variant {idx + 1}"
+                                />
+                                <input
+                                    type="text"
+                                    inputmode="numeric"
+                                    placeholder="Stok"
+                                    bind:value={variant.stock}
+                                    aria-label="Stock for variant {idx + 1}"
+                                />
+                                <button
+                                    type="button"
+                                    class="variant-remove"
+                                    onclick={() => removeVariantDraft(idx)}
+                                    aria-label="Hapus variant"
+                                    disabled={newVariants.length === 1}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        {/each}
                     </div>
-                    <div class="form-group flex-1">
-                        <label for="item-unit">Unit of Measure</label>
-                        <select id="item-unit" bind:value={newUnit}>
-                            {#each unitOptions as opt}
-                                <option value={opt}>{opt}</option>
-                            {/each}
-                        </select>
-                    </div>
+                    <button
+                        type="button"
+                        class="btn-add-variant"
+                        onclick={addVariantDraft}
+                    >
+                        + Tambah Variant
+                    </button>
                 </div>
 
                 {#if formError}
@@ -1053,6 +1174,17 @@
         font-weight: 600;
     }
 
+    .stock-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+    .stock-hint {
+        font-size: 0.7rem;
+        color: var(--color-text-secondary, #6b7280);
+    }
+
     .stock-badge {
         display: inline-block;
         padding: 3px 12px;
@@ -1310,6 +1442,66 @@
         color: var(--color-danger);
         font-size: 0.8rem;
         margin-bottom: 16px;
+    }
+
+    .form-hint {
+        font-size: 12px;
+        color: var(--color-text-secondary, #6b7280);
+        margin: 4px 0 12px;
+    }
+
+    .variant-drafts {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .variant-draft-row {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 0.8fr 36px;
+        gap: 6px;
+        align-items: center;
+    }
+    .variant-draft-row select,
+    .variant-draft-row input {
+        padding: 8px 10px;
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-radius: var(--radius-sm, 6px);
+        font-size: 13px;
+        background: var(--color-bg-card, white);
+        color: var(--color-text);
+    }
+    .variant-remove {
+        width: 32px;
+        height: 32px;
+        background: none;
+        border: 1px solid var(--color-border, #e5e7eb);
+        color: #ef4444;
+        border-radius: var(--radius-sm, 6px);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .variant-remove:hover:not(:disabled) {
+        background: #fee2e2;
+        border-color: #ef4444;
+    }
+    .variant-remove:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .btn-add-variant {
+        background: none;
+        border: 1px dashed var(--color-border, #d1d5db);
+        color: var(--color-primary, #6c63ff);
+        padding: 8px 12px;
+        border-radius: var(--radius-sm, 6px);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .btn-add-variant:hover {
+        background: rgba(108, 99, 255, 0.06);
     }
 
     .modal-actions {

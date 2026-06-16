@@ -67,6 +67,7 @@ export class ProductsService {
         const newVariant = this.variantRepo.create({
           unitName: dto.unit ?? 'Piece',
           price: dto.price,
+          stock: dto.stock ?? 0,
           product: existing,
         });
         await this.variantRepo.save(newVariant);
@@ -92,12 +93,15 @@ export class ProductsService {
         sold: dto.sold ?? 0,
         seller: dto.seller ?? '',
         sellerCity: dto.sellerCity ?? '',
+        // Deprecated: stock moves to variants. Keep products.stock = sum of
+        // variant stocks so legacy queries/aggregations still work.
         stock: dto.stock ?? 0,
         unit: dto.unit ?? 'Piece',
         variants: [
           this.variantRepo.create({
             unitName: dto.unit ?? 'Piece',
             price: dto.price,
+            stock: dto.stock ?? 0,
           }),
         ],
       });
@@ -132,7 +136,11 @@ export class ProductsService {
       // Remove old variants and replace
       await this.variantRepo.delete({ product: { id } });
       product.variants = dto.variants.map((v) =>
-        this.variantRepo.create({ unitName: v.unitName, price: v.price }),
+        this.variantRepo.create({
+          unitName: v.unitName,
+          price: v.price,
+          stock: v.stock ?? 0,
+        }),
       );
     }
 
