@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Order, OrderStatus } from './order.entity.js';
@@ -8,6 +8,7 @@ import { Product } from '../products/product.entity.js';
 import { ProductVariant } from '../products/product-variant.entity.js';
 import { DriversService } from '../drivers/drivers.service.js';
 import { DriverLocationGateway } from '../driver-location/driver-location.gateway.js';
+import { PaymentService } from '../payment/payment.service.js';
 import { getRouteWithORSAndFallback, RouteResult } from '../utils/openroute.util.js';
 import { geocodeAddress } from '../utils/nominatim.util.js';
 import { snapToRoadOSRM } from '../utils/osrm.util.js';
@@ -26,6 +27,8 @@ export class OrdersService {
     private readonly driversService: DriversService,
     @Inject(forwardRef(() => DriverLocationGateway))
     private readonly locationGateway: DriverLocationGateway,
+    @Inject(forwardRef(() => PaymentService))
+    private readonly paymentService: PaymentService,
   ) {}
 
   async findAll(): Promise<Order[]> {
@@ -41,6 +44,18 @@ export class OrdersService {
       relations: ['items', 'driver'],
       cache: false,
     });
+  }
+
+  /**
+   * Save the Midtrans transactionId on the order right after a Snap token is
+   * created. Used by PaymentController to link the order to the Midtrans
+   * transaction for later status verification.
+   */
+  async updateTransactionId(
+    orderId: number,
+    transactionId: string,
+  ): Promise<void> {
+    await this.orderRepo.update(orderId, { transactionId });
   }
 
   async create(dto: CreateOrderDto): Promise<Order> {
@@ -221,6 +236,42 @@ export class OrdersService {
     if (order.status !== OrderStatus.PENDING_PAYMENT) {
       console.log('[confirmPayment] Order is not in pending_payment status:', orderId, order.status);
       return order;
+    }
+
+    // Validate the transaction with Midtrans before confirming the order. This
+    // stops the user from being able to "confirm" the payment by simply tapping
+    // a button in the app when they actually cancelled / never paid in the
+    // Midtrans sandbox (or production) page.
+    const txId = (order as any).transactionId as string | undefined;
+    if (!txId) {
+      throw new BadRequestException(
+        'Order ini tidak memiliki transactionId Midtrans',
+      );
+    }
+
+    let midtransStatus: string | null = null;
+    try {
+      const result = await this.paymentService.checkTransactionStatus(txId);
+      midtransStatus = result?.status ?? null;
+    } catch (e) {
+      console.error(
+        '[confirmPayment] Failed to query Midtrans status:',
+        e instanceof Error ? e.message : String(e),
+      );
+      throw new BadRequestException(
+        'Tidak dapat memverifikasi status pembayaran ke Midtrans. Coba lagi.',
+      );
+    }
+
+    console.log(
+      `[confirmPayment] Midtrans status for tx=${txId} is "${midtransStatus}"`,
+    );
+
+    if (midtransStatus !== 'paid') {
+      const pretty = midtransStatus ?? 'unknown';
+      throw new BadRequestException(
+        `Pembayaran belum selesai (status Midtrans: ${pretty}). Selesaikan pembayaran di Midtrans terlebih dahulu.`,
+      );
     }
 
     // Update status to PENDING

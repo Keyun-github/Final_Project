@@ -7,8 +7,11 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PaymentService } from './payment.service.js';
+import { OrdersService } from '../orders/orders.service.js';
 
 class CreateSnapTokenDto {
   orderId: string;
@@ -20,7 +23,11 @@ class CreateSnapTokenDto {
 
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    @Inject(forwardRef(() => OrdersService))
+    private readonly ordersService: OrdersService,
+  ) {}
 
   @Post('snap-token')
   @HttpCode(HttpStatus.OK)
@@ -35,6 +42,24 @@ export class PaymentController {
         phone: body.customerPhone,
       },
     );
+
+    // Persist the Midtrans transactionId on the order so we can verify
+    // payment status when the customer returns to the app.
+    const orderIdNum = parseInt(body.orderId, 10);
+    if (!Number.isNaN(orderIdNum)) {
+      try {
+        await this.ordersService.updateTransactionId(
+          orderIdNum,
+          result.transactionId,
+        );
+      } catch (e) {
+        console.error(
+          '[PaymentController] Failed to save transactionId on order:',
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+    }
+
     return result;
   }
 
