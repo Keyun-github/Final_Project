@@ -13,6 +13,7 @@ import { SeedService } from './seed/seed.service.js';
 import { DriverLocationModule } from './driver-location/driver-location.module.js';
 import { ChatModule } from './chat/chat.module.js';
 import { SupabaseModule } from './supabase/supabase.module.js';
+import { UnitsModule } from './units/units.module.js';
 import { Product } from './products/product.entity.js';
 import { ProductVariant } from './products/product-variant.entity.js';
 import { Order } from './orders/order.entity.js';
@@ -22,6 +23,7 @@ import { TimeSlot } from './time-slots/time-slot.entity.js';
 import { Customer } from './customers/customer.entity.js';
 import { Conversation } from './chat/entities/conversation.entity.js';
 import { Message } from './chat/entities/message.entity.js';
+import { Unit } from './units/units.entity.js';
 
 const dbHost = process.env.DB_HOST;
 const dbPort = parseInt(process.env.DB_PORT || '5432', 10);
@@ -59,6 +61,7 @@ if (!dbPassword) {
         Customer,
         Conversation,
         Message,
+        Unit,
       ],
       synchronize: false,
       logging: process.env.NODE_ENV !== 'production',
@@ -72,6 +75,7 @@ if (!dbPassword) {
     DriverLocationModule,
     ChatModule,
     SupabaseModule,
+    UnitsModule,
   ],
   controllers: [AppController],
   providers: [AppService, SeedService],
