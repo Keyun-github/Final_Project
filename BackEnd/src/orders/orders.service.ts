@@ -5,6 +5,7 @@ import { Order, OrderStatus } from './order.entity.js';
 import { OrderItem } from './order-item.entity.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { Product } from '../products/product.entity.js';
+import { ProductVariant } from '../products/product-variant.entity.js';
 import { DriversService } from '../drivers/drivers.service.js';
 import { DriverLocationGateway } from '../driver-location/driver-location.gateway.js';
 import { getRouteWithORSAndFallback, RouteResult } from '../utils/openroute.util.js';
@@ -20,6 +21,8 @@ export class OrdersService {
     private readonly itemRepo: Repository<OrderItem>,
     @InjectRepository(Product)
     private readonly productRepo: Repository<Product>,
+    @InjectRepository(ProductVariant)
+    private readonly variantRepo: Repository<ProductVariant>,
     private readonly driversService: DriversService,
     @Inject(forwardRef(() => DriverLocationGateway))
     private readonly locationGateway: DriverLocationGateway,
@@ -53,6 +56,7 @@ export class OrdersService {
       for (const item of dto.items) {
         const product = await this.productRepo.findOne({
           where: { name: item.productName },
+          relations: ['variants'],
         });
 
         if (!product) {
@@ -60,9 +64,17 @@ export class OrdersService {
         }
 
         const requestedQty = item.quantity ?? 1;
-        if (product.stock < requestedQty) {
+        const variant = this.findVariantForItem(product, item);
+
+        // Prefer the per-variant stock when a unit is specified. Fall back to
+        // the legacy products.stock for products without variants.
+        const available = variant ? variant.stock : product.stock;
+        if (available < requestedQty) {
+          const label = variant
+            ? `${item.productName} (${variant.unitName})`
+            : item.productName;
           throw new Error(
-            `Stok tidak cukup untuk "${item.productName}". Tersedia: ${product.stock}, diminta: ${requestedQty}`,
+            `Stok tidak cukup untuk "${label}". Tersedia: ${available}, diminta: ${requestedQty}`,
           );
         }
       }
@@ -100,15 +112,24 @@ export class OrdersService {
       const storeLat = -6.1389;
       const storeLng = 106.6297;
 
-      // 3. Decrease stock for each product
+      // 3. Decrease stock for each product (per-variant when available)
       for (const item of dto.items) {
         const product = await this.productRepo.findOne({
           where: { name: item.productName },
+          relations: ['variants'],
         });
 
         if (product) {
           const quantity = item.quantity ?? 1;
-          product.stock = product.stock - quantity;
+          const variant = this.findVariantForItem(product, item);
+          if (variant) {
+            variant.stock = Math.max(0, (variant.stock ?? 0) - quantity);
+            // Keep products.stock in sync so legacy views/queries stay correct.
+            product.stock = Math.max(0, (product.stock ?? 0) - quantity);
+            await this.variantRepo.save(variant);
+          } else {
+            product.stock = Math.max(0, (product.stock ?? 0) - quantity);
+          }
           product.sold = (product.sold ?? 0) + quantity;
           await this.productRepo.save(product);
         }
@@ -210,14 +231,22 @@ export class OrdersService {
     const storeLat = -7.2628478;
     const storeLng = 112.7336368;
 
-    // Deduct stock for each item
+    // Deduct stock for each item (per-variant when available)
     for (const item of order.items) {
       const product = await this.productRepo.findOne({
         where: { name: item.productName },
+        relations: ['variants'],
       });
 
       if (product) {
-        product.stock = product.stock - item.quantity;
+        const variant = this.findVariantForItem(product, item);
+        if (variant) {
+          variant.stock = Math.max(0, (variant.stock ?? 0) - item.quantity);
+          product.stock = Math.max(0, (product.stock ?? 0) - item.quantity);
+          await this.variantRepo.save(variant);
+        } else {
+          product.stock = Math.max(0, (product.stock ?? 0) - item.quantity);
+        }
         product.sold = (product.sold ?? 0) + item.quantity;
         await this.productRepo.save(product);
       }
@@ -256,6 +285,25 @@ export class OrdersService {
       where: { id },
       relations: ['items', 'driver'],
     });
+  }
+
+  /**
+   * Match an order item to a product variant by `unitName`. If the order item
+   * has no unitName (legacy data) or no variant matches, return null — the
+   * caller should then fall back to the legacy `products.stock` field.
+   */
+  private findVariantForItem(
+    product: Product,
+    item: { unitName?: string; productName: string },
+  ): ProductVariant | null {
+    if (!product.variants || product.variants.length === 0) return null;
+    if (!item.unitName) return null;
+    const wanted = item.unitName.toLowerCase().trim();
+    return (
+      product.variants.find(
+        (v) => v.unitName.toLowerCase().trim() === wanted,
+      ) ?? null
+    );
   }
 
   async getStats(): Promise<{
