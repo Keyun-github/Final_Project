@@ -1,6 +1,14 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { fetchProducts, createProduct, deleteProduct } from "$lib/api";
+    import {
+        fetchProducts,
+        createProduct,
+        deleteProduct,
+        fetchUnits,
+        createUnit,
+        deleteUnit,
+        type UnitItem,
+    } from "$lib/api";
     import {
         initProductsWebSocket,
         onProductCreated,
@@ -56,12 +64,62 @@
 
     import { onDestroy } from "svelte";
 
-    const unitOptions = ["KG", "Box", "Sack - 25kg", "Sack - 50kg", "Piece"];
+    // ---- Units of measure (loaded from backend so customer + admin stay in sync) ----
+    let unitOptions = $state<string[]>([
+        "KG",
+        "Box",
+        "Sack - 25kg",
+        "Sack - 50kg",
+        "Piece",
+    ]);
+    let units = $state<UnitItem[]>([]);
+    let showUnitsModal = $state(false);
+    let newUnitName = $state("");
+    let unitFormError = $state("");
+    let deletingUnitId = $state<number | null>(null);
 
     let refreshInterval: ReturnType<typeof setInterval>;
 
+    async function loadUnits() {
+        try {
+            const list = await fetchUnits();
+            units = list;
+            unitOptions = list.map((u) => u.name);
+        } catch (e) {
+            console.error("Failed to load units:", e);
+        }
+    }
+
+    async function handleAddUnit() {
+        const name = newUnitName.trim();
+        if (!name) {
+            unitFormError = "Nama unit tidak boleh kosong";
+            return;
+        }
+        unitFormError = "";
+        try {
+            await createUnit(name);
+            newUnitName = "";
+            await loadUnits();
+        } catch (e: any) {
+            unitFormError = e?.message ?? "Gagal menambah unit";
+        }
+    }
+
+    async function handleDeleteUnit(id: number) {
+        deletingUnitId = id;
+        try {
+            await deleteUnit(id);
+            await loadUnits();
+        } catch (e: any) {
+            showToast(e?.message ?? "Gagal menghapus unit", "error");
+        } finally {
+            deletingUnitId = null;
+        }
+    }
+
     onMount(async () => {
-        await loadProducts();
+        await Promise.all([loadProducts(), loadUnits()]);
         // Auto-refresh every 30 seconds
         refreshInterval = setInterval(() => {
             loadProducts();
@@ -269,6 +327,20 @@
                 <path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
             Refresh
+        </button>
+        <button class="btn-units" onclick={() => (showUnitsModal = true)} id="btn-manage-units">
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><circle cx="12" cy="12" r="3" /><path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                /></svg
+            >
+            Kelola Unit
         </button>
         <button class="btn-add" onclick={openModal} id="btn-add-stock">
             <svg
@@ -536,6 +608,88 @@
     </div>
 {/if}
 
+<!-- ===== Manage Units Modal ===== -->
+{#if showUnitsModal}
+    <div
+        class="modal-backdrop"
+        onclick={() => (showUnitsModal = false)}
+        onkeydown={(e) => e.key === "Escape" && (showUnitsModal = false)}
+        role="button"
+        tabindex="-1"
+        aria-label="Close units modal"
+    >
+        <div
+            class="modal-card"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+        >
+            <div class="modal-header">
+                <h2>Kelola Unit of Measure</h2>
+                <button
+                    class="modal-close"
+                    onclick={() => (showUnitsModal = false)}
+                    aria-label="Close">×</button
+                >
+            </div>
+
+            <div class="modal-body">
+                <p class="modal-hint">
+                    Unit yang ditambah akan tersedia di form Add Item dan di app
+                    customer.
+                </p>
+
+                <div class="units-list">
+                    {#each units as u (u.id)}
+                        <div class="unit-row">
+                            <span class="unit-name">
+                                {u.name}
+                                {#if u.isDefault}
+                                    <span class="unit-badge">default</span>
+                                {/if}
+                            </span>
+                            {#if !u.isDefault}
+                                <button
+                                    class="unit-delete"
+                                    disabled={deletingUnitId === u.id}
+                                    onclick={() => handleDeleteUnit(u.id)}
+                                    aria-label="Hapus unit"
+                                >
+                                    {deletingUnitId === u.id ? "..." : "×"}
+                                </button>
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+
+                <div class="unit-add-form">
+                    <input
+                        type="text"
+                        placeholder="Unit baru (contoh: Lusin, Pack)"
+                        bind:value={newUnitName}
+                        onkeydown={(e) => e.key === "Enter" && handleAddUnit()}
+                        id="input-new-unit"
+                    />
+                    <button class="btn-add-unit" onclick={handleAddUnit}
+                        >Tambah</button
+                    >
+                </div>
+                {#if unitFormError}
+                    <div class="form-error">{unitFormError}</div>
+                {/if}
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    class="btn-secondary"
+                    onclick={() => (showUnitsModal = false)}>Tutup</button
+                >
+            </div>
+        </div>
+    </div>
+{/if}
+
 <style>
     /* ===== Top Actions ===== */
     .top-actions {
@@ -628,6 +782,173 @@
     .btn-add:hover {
         transform: translateY(-1px);
         box-shadow: var(--shadow-glow);
+    }
+
+    /* ===== Manage Units Button ===== */
+    .btn-units {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--color-bg-card);
+        color: var(--color-text);
+        border: 1px solid var(--color-border);
+        padding: 8px 16px;
+        border-radius: var(--radius-md, 8px);
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-units:hover {
+        background: var(--color-primary, #6c63ff);
+        color: white;
+        border-color: var(--color-primary, #6c63ff);
+    }
+
+    /* ===== Modal ===== */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 20px;
+    }
+    .modal-card {
+        background: var(--color-bg-card, white);
+        border-radius: var(--radius-lg, 12px);
+        width: 100%;
+        max-width: 480px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    }
+    .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--color-border, #e5e7eb);
+    }
+    .modal-header h2 {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+    }
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: var(--color-text-secondary, #6b7280);
+        line-height: 1;
+    }
+    .modal-body {
+        padding: 20px 24px;
+    }
+    .modal-hint {
+        font-size: 13px;
+        color: var(--color-text-secondary, #6b7280);
+        margin: 0 0 16px;
+    }
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--color-border, #e5e7eb);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .btn-secondary {
+        background: var(--color-bg-card, white);
+        color: var(--color-text);
+        border: 1px solid var(--color-border, #e5e7eb);
+        padding: 8px 16px;
+        border-radius: var(--radius-md, 8px);
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .btn-secondary:hover {
+        background: var(--color-bg, #f3f4f6);
+    }
+
+    .units-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+    .unit-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: var(--color-bg, #f9fafb);
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-radius: 8px;
+    }
+    .unit-name {
+        font-weight: 500;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .unit-badge {
+        font-size: 10px;
+        background: var(--color-primary, #6c63ff);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+    .unit-delete {
+        background: none;
+        border: 1px solid var(--color-border, #e5e7eb);
+        color: #ef4444;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .unit-delete:hover:not(:disabled) {
+        background: #fee2e2;
+        border-color: #ef4444;
+    }
+    .unit-delete:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .unit-add-form {
+        display: flex;
+        gap: 8px;
+    }
+    .unit-add-form input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    .btn-add-unit {
+        background: var(--color-primary, #6c63ff);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .btn-add-unit:hover {
+        background: var(--color-primary-hover, #5a52d5);
     }
 
     /* ===== Table ===== */

@@ -203,3 +203,27 @@ export async function setTimeSlotActive(
         body: JSON.stringify({ isActive }),
     });
 }
+
+// ----- Units -----
+export interface UnitItem {
+    id: number;
+    name: string;
+    isDefault: boolean;
+    isActive: boolean;
+    createdAt: string;
+}
+
+export async function fetchUnits(): Promise<UnitItem[]> {
+    return request('/units');
+}
+
+export async function createUnit(name: string): Promise<UnitItem> {
+    return request('/units', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+    });
+}
+
+export async function deleteUnit(id: number): Promise<{ message: string; unit: UnitItem }> {
+    return request(`/units/${id}`, { method: 'DELETE' });
+}

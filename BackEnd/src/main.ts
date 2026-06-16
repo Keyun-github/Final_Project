@@ -16,6 +16,7 @@ async function bootstrap() {
     prefix: '/uploads',
   });
 
+  // Cors perlu di perbaiki
   app.enableCors({
     origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
