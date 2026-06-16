@@ -497,7 +497,24 @@
                             </div>
                         </div>
                     </td>
-                    <td class="col-price">{formatRupiah(item.price)}</td>
+                    <td class="col-price">
+                        {#if item.variants.length === 0}
+                            {formatRupiah(item.price)}
+                        {:else}
+                            <div class="price-list">
+                                {#each item.variants as variant}
+                                    <div class="price-row">
+                                        <span class="price-value"
+                                            >{formatRupiah(variant.price)}</span
+                                        >
+                                        <span class="price-unit"
+                                            >({variant.unitName})</span
+                                        >
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
+                    </td>
                     <td>
                         <div class="stock-cell">
                             <span
@@ -515,7 +532,19 @@
                             {/if}
                         </div>
                     </td>
-                    <td><span class="unit-badge">{item.unit}</span></td>
+                    <td>
+                        <div class="unit-list">
+                            {#if item.variants.length === 0}
+                                <span class="unit-badge">{item.unit}</span>
+                            {:else}
+                                {#each item.variants as variant}
+                                    <span class="unit-badge"
+                                        >{variant.unitName}</span
+                                    >
+                                {/each}
+                            {/if}
+                        </div>
+                    </td>
                     <td>
                         {#if needsReorder(item)}
                             <span class="status-badge warning">Need Reorder</span>
@@ -1183,6 +1212,34 @@
     .stock-hint {
         font-size: 0.7rem;
         color: var(--color-text-secondary, #6b7280);
+    }
+
+    .price-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .price-row {
+        font-size: 0.8rem;
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+        white-space: nowrap;
+    }
+    .price-value {
+        font-weight: 600;
+        color: var(--color-text);
+    }
+    .price-unit {
+        font-size: 0.7rem;
+        color: var(--color-text-secondary, #6b7280);
+    }
+
+    .unit-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-width: 140px;
     }
 
     .stock-badge {
