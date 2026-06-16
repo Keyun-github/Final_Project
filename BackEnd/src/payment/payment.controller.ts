@@ -12,14 +12,10 @@ import {
 } from '@nestjs/common';
 import { PaymentService } from './payment.service.js';
 import { OrdersService } from '../orders/orders.service.js';
-
-class CreateSnapTokenDto {
-  orderId: string;
-  amount: number;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-}
+import {
+  CreateSnapTokenDto,
+  MidtransNotificationDto,
+} from './dto/payment.dto.js';
 
 @Controller('payment')
 export class PaymentController {
@@ -31,17 +27,20 @@ export class PaymentController {
 
   @Post('snap-token')
   @HttpCode(HttpStatus.OK)
-  async createSnapToken(@Body() body: any) {
+  async createSnapToken(@Body() body: CreateSnapTokenDto) {
     console.log('[PaymentController] Received body:', JSON.stringify(body));
-    const result = await this.paymentService.createSnapToken(
-      body.orderId,
-      body.amount,
-      {
-        name: body.customerName,
-        email: body.customerEmail,
-        phone: body.customerPhone,
-      },
-    );
+
+    // Accept either the nested `customerDetails` shape or the legacy flat
+    // fields. Older clients still send the flat shape.
+    const customerName = body.customerDetails?.name ?? body.customerName ?? '';
+    const customerEmail = body.customerDetails?.email ?? body.customerEmail ?? '';
+    const customerPhone = body.customerDetails?.phone ?? body.customerPhone ?? '';
+
+    const result = await this.paymentService.createSnapToken(body.orderId, body.amount, {
+      name: customerName,
+      email: customerEmail,
+      phone: customerPhone,
+    });
 
     // Persist the Midtrans transactionId on the order so we can verify
     // payment status when the customer returns to the app.
@@ -65,7 +64,7 @@ export class PaymentController {
 
   @Post('notification')
   @HttpCode(HttpStatus.OK)
-  async handleNotification(@Body() payload: any) {
+  async handleNotification(@Body() payload: MidtransNotificationDto) {
     console.log('[PaymentController] Received Midtrans notification:', payload);
     const result = await this.paymentService.handleNotification(payload);
     return { status: 'ok', result };

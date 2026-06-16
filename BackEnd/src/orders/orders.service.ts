@@ -242,7 +242,9 @@ export class OrdersService {
     // stops the user from being able to "confirm" the payment by simply tapping
     // a button in the app when they actually cancelled / never paid in the
     // Midtrans sandbox (or production) page.
-    const txId = (order as any).transactionId as string | undefined;
+    // `order.transactionId` is typed correctly now that the column exists in
+    // the database (see scripts/add-order-transaction-id.sql).
+    const txId = order.transactionId;
     if (!txId) {
       throw new BadRequestException(
         'Order ini tidak memiliki transactionId Midtrans',

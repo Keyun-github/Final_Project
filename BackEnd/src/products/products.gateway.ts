@@ -5,6 +5,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { Product } from './product.entity.js';
 
 @WebSocketGateway({
   cors: {
@@ -25,7 +26,7 @@ export class ProductsGateway implements OnGatewayConnection, OnGatewayDisconnect
     console.log(`[ProductsWS] Client disconnected: ${client.id}`);
   }
 
-  broadcastProductCreated(product: any) {
+  broadcastProductCreated(product: Product) {
     console.log('[ProductsWS] Broadcasting product_created:', product.id);
     this.server.emit('product_created', {
       product,
@@ -33,7 +34,7 @@ export class ProductsGateway implements OnGatewayConnection, OnGatewayDisconnect
     });
   }
 
-  broadcastProductUpdated(product: any) {
+  broadcastProductUpdated(product: Product) {
     console.log('[ProductsWS] Broadcasting product_updated:', product.id);
     this.server.emit('product_updated', {
       product,
