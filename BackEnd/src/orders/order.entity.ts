@@ -62,6 +62,9 @@ export class Order {
   @Column({ name: 'paymentMethod', default: 'COD' })
   paymentMethod: string;
 
+  @Column({ name: 'transactionId', nullable: true, type: 'varchar' })
+  transactionId: string | null;
+
   @Column({ name: 'driverId', nullable: true })
   driverId: number | null;
 

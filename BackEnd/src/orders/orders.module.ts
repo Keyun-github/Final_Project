@@ -6,6 +6,7 @@ import { Product } from '../products/product.entity.js';
 import { ProductVariant } from '../products/product-variant.entity.js';
 import { Driver } from '../drivers/driver.entity.js';
 import { DriversModule } from '../drivers/drivers.module.js';
+import { PaymentModule } from '../payment/payment.module.js';
 import { OrdersService } from './orders.service.js';
 import { OrdersController } from './orders.controller.js';
 
@@ -19,6 +20,7 @@ import { OrdersController } from './orders.controller.js';
       Driver,
     ]),
     DriversModule,
+    PaymentModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],
