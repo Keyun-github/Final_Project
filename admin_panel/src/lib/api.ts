@@ -1,18 +1,13 @@
-const BASE_URL = 'http://localhost:3000';
-
-let currentAbortController: AbortController | null = null;
+// VITE_API_URL is baked into the bundle at build time. Default to the Dokploy
+// backend so `npm run dev` and `vite preview` still work out of the box.
+const BASE_URL =
+    (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') ||
+    'https://api-kelun.ngelantour.cloud';
 
 async function request(path: string, options?: RequestInit) {
-    if (currentAbortController) {
-        currentAbortController.abort();
-    }
-    currentAbortController = new AbortController();
-    const signal = currentAbortController.signal;
-
     try {
         const res = await fetch(`${BASE_URL}${path}`, {
             headers: { 'Content-Type': 'application/json', ...options?.headers },
-            signal,
             ...options,
         });
         if (!res.ok) {

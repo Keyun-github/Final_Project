@@ -5,13 +5,14 @@
         fetchDashboardTimeSlots,
         fetchOrdersBySlot,
         setTimeSlotActive,
+        fetchEmployees,
         type DashboardSlot,
         type SlotOrder,
     } from "$lib/api";
 
     // ---- Dashboard Stats & Charts ----
     let stats = $state([
-        { label: "Total Employee", value: "48", icon: "employee", color: "#6c63ff" },
+        { label: "Total Employee", value: "0", icon: "employee", color: "#6c63ff" },
         { label: "Revenue Today", value: "Rp 0", icon: "revenue", color: "#00d4aa" },
         { label: "Total Orders Today", value: "0", icon: "orders-today", color: "#42a5f5" },
         { label: "Total Orders This Month", value: "0", icon: "orders-month", color: "#ffb74d" },
@@ -64,10 +65,13 @@
 
     async function loadStats() {
         try {
-            const data = await fetchOrderStats();
+            const [data, employees] = await Promise.all([
+                fetchOrderStats(),
+                fetchEmployees(),
+            ]);
             const revenue = Number(data.revenueToday || 0);
             stats = [
-                { label: "Total Employee", value: "48", icon: "employee", color: "#6c63ff" },
+                { label: "Total Employee", value: String(employees.length), icon: "employee", color: "#6c63ff" },
                 { label: "Revenue Today", value: "Rp " + revenue.toLocaleString("id-ID"), icon: "revenue", color: "#00d4aa" },
                 { label: "Total Orders Today", value: String(data.totalOrdersToday || 0), icon: "orders-today", color: "#42a5f5" },
                 { label: "Total Orders This Month", value: String(data.totalOrdersThisMonth || 0), icon: "orders-month", color: "#ffb74d" },
