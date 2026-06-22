@@ -1,8 +1,13 @@
 class ProductVariant {
   final String unitName;
   final double price;
+  final int stock;
 
-  const ProductVariant({required this.unitName, required this.price});
+  const ProductVariant({
+    required this.unitName,
+    required this.price,
+    this.stock = 0,
+  });
 
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
     return ProductVariant(
@@ -10,6 +15,9 @@ class ProductVariant {
       price: (json['price'] is num)
           ? json['price'].toDouble()
           : double.tryParse(json['price'].toString()) ?? 0,
+      stock: (json['stock'] is num)
+          ? (json['stock'] as num).toInt()
+          : int.tryParse(json['stock']?.toString() ?? '0') ?? 0,
     );
   }
 

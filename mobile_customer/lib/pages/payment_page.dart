@@ -134,8 +134,14 @@ class _PaymentPageState extends State<PaymentPage> {
 
       // Confirm payment (backend will update status to PENDING and deduct stock)
       if (orderId != null) {
-        final confirmResult = await ApiService.confirmPayment(orderId);
-        print('[PaymentPage] Payment confirmed: $confirmResult');
+        try {
+          final confirmResult = await ApiService.confirmPayment(orderId);
+          print('[PaymentPage] Payment confirmed: $confirmResult');
+        } catch (e) {
+          // Re-throw so the generic catch below can release the time slot
+          // and surface a clearer message to the user.
+          rethrow;
+        }
       }
 
       if (!mounted) return;
@@ -192,7 +198,17 @@ class _PaymentPageState extends State<PaymentPage> {
       setState(() {
         _isProcessing = false;
       });
-      _showStockError('Terjadi kesalahan: ${e.toString()}');
+      // Distinguish "stock insufficient" from "payment not yet completed"
+      // so the user knows whether to retry checkout or finish paying in
+      // Midtrans first.
+      final msg = e.toString();
+      if (msg.contains('Midtrans') ||
+          msg.toLowerCase().contains('pembayaran') ||
+          msg.toLowerCase().contains('paid')) {
+        _showPaymentError(msg);
+      } else {
+        _showStockError('Terjadi kesalahan: $msg');
+      }
     }
   }
 
@@ -285,6 +301,38 @@ class _PaymentPageState extends State<PaymentPage> {
             const SizedBox(width: 8),
             const Text(
               'Stok Tidak Cukup',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: Text(message, style: const TextStyle(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'OK',
+              style: TextStyle(
+                color: Color(0xFF6C63FF),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPaymentError(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red[600]),
+            const SizedBox(width: 8),
+            const Text(
+              'Pembayaran Belum Selesai',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ],

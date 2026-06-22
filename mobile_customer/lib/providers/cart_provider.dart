@@ -33,6 +33,7 @@ class CartItem {
     'productId': product.id,
     'productName': product.name,
     'selectedUnit': selectedUnit,
+    'unitName': selectedUnit, // Backend looks for `unitName` to match variants
     'unitPrice': unitPrice,
     'quantity': quantity,
   };
@@ -122,7 +123,7 @@ class CartProvider extends ChangeNotifier {
           _items.add(
             CartItem(
               product: product,
-              selectedUnit: item['selectedUnit'],
+              selectedUnit: item['selectedUnit'] ?? item['unitName'],
               unitPrice: item['unitPrice']?.toDouble(),
               quantity: item['quantity'] ?? 1,
             ),
