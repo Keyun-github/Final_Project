@@ -4,7 +4,7 @@
 # cirruslabs/flutter image includes Flutter SDK + Dart.
 # Pinned version so future Flutter SDK changes don't break the
 # build. Adjust SDK version to match what you have locally.
-FROM ghcr.io/cirruslabs/flutter:3.24.5 AS builder
+FROM ghcr.io/cirruslabs/flutter:3.41.1 AS builder
 
 WORKDIR /app
 
