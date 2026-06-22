@@ -6,6 +6,7 @@ import {
   Body,
   Headers,
 } from '@nestjs/common';
+import { IsString, IsNumber } from 'class-validator';
 import { StoreConfigService } from './store-config.service.js';
 
 /**
@@ -13,6 +14,7 @@ import { StoreConfigService } from './store-config.service.js';
  * automatically via Nominatim. Admin doesn't need to know lat/lng.
  */
 class ResolveAddressDto {
+  @IsString()
   address!: string;
 }
 
@@ -23,8 +25,26 @@ class ResolveAddressDto {
  * what they wanted.
  */
 class UpdateCoordsDto {
+  @IsString()
   address!: string;
+
+  @IsNumber()
   lat!: number;
+
+  @IsNumber()
+  lng!: number;
+}
+
+/**
+ * Body for POST /store-config/reverse-geocode. Kept as a class so
+ * ValidationPipe with `forbidNonWhitelisted: true` recognises the
+ * whitelist — inline TS object types do not produce runtime metadata.
+ */
+class ReverseGeocodeDto {
+  @IsNumber()
+  lat!: number;
+
+  @IsNumber()
   lng!: number;
 }
 
@@ -95,7 +115,7 @@ export class StoreConfigController {
    * flow).
    */
   @Post('reverse-geocode')
-  async reverseGeocode(@Body() body: { lat: number; lng: number }) {
+  async reverseGeocode(@Body() body: ReverseGeocodeDto) {
     const displayName = await this.service.reverseGeocode(
       body.lat,
       body.lng,
