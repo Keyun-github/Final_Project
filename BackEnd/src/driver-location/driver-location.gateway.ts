@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { DriversService } from '../drivers/drivers.service.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { StoreConfigService } from '../store-config/store-config.service.js';
 import { getRouteWithORSAndFallback } from '../utils/openroute.util.js';
 
 @WebSocketGateway({
@@ -25,6 +26,7 @@ export class DriverLocationGateway implements OnGatewayConnection, OnGatewayDisc
   constructor(
     private readonly driversService: DriversService,
     private readonly ordersService: OrdersService,
+    private readonly storeConfigService: StoreConfigService,
   ) {}
 
   handleConnection(client: Socket) {
@@ -81,8 +83,9 @@ export class DriverLocationGateway implements OnGatewayConnection, OnGatewayDisc
             const orderStatus = data.status || order.status;
 
             const source: [number, number] = [driverLng, driverLat];
-            const storeLat = -7.2628478;
-            const storeLng = 112.7336368;
+            const storeConfig = await this.storeConfigService.getConfig();
+            const storeLat = storeConfig.lat;
+            const storeLng = storeConfig.lng;
             const destLat = order.deliveryLat ?? 0;
             const destLng = order.deliveryLng ?? 0;
 

@@ -1,6 +1,12 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { fetchAvailableDrivers, fetchOrderRoutes, type Employee } from "$lib/api";
+    import {
+        fetchAvailableDrivers,
+        fetchOrderRoutes,
+        fetchStoreConfig,
+        type Employee,
+        type StoreConfig,
+    } from "$lib/api";
     import { initWebSocket, setLocationUpdateHandler, disconnectWebSocket, type DriverLocationUpdate } from "$lib/websocket";
 
     let drivers = $state<Employee[]>([]);
@@ -14,12 +20,12 @@
     let pendingMapInits: Set<number> = new Set();
     let abortController: AbortController | null = null;
 
-    const STORE_LAT = -7.2628478;
-    const STORE_LNG = 112.7336368;
-    const STORE_NAME = "Jl. Kedung Rukem IV / 55";
+    // Pulled from the backend (admin Settings page) — falls back to legacy
+    // hardcoded values if the API call fails so the page still renders.
+    let storeConfig = $state<StoreConfig | null>(null);
 
     onMount(async () => {
-        await loadDrivers();
+        await Promise.all([loadStoreConfig(), loadDrivers()]);
         pollInterval = setInterval(() => {
             loadDrivers();
         }, 30000);
@@ -38,6 +44,34 @@
         mapInstances.clear();
         disconnectWebSocket();
     });
+
+    async function loadStoreConfig() {
+        try {
+            storeConfig = await fetchStoreConfig();
+        } catch (e) {
+            console.error('Failed to load store config, using fallback:', e);
+            storeConfig = {
+                id: 1,
+                address: 'Jl. Kedung Rukem IV / 55',
+                lat: -7.2628478,
+                lng: 112.7336368,
+                updatedAt: new Date().toISOString(),
+                updatedBy: null,
+            };
+        }
+    }
+
+    // Convenience getters that gracefully handle either the loaded config
+    // or the legacy fallback values.
+    function getStoreLat(): number {
+        return storeConfig?.lat ?? -7.2628478;
+    }
+    function getStoreLng(): number {
+        return storeConfig?.lng ?? 112.7336368;
+    }
+    function getStoreName(): string {
+        return storeConfig?.address ?? 'Jl. Kedung Rukem IV / 55';
+    }
 
     function handleDriverLocationUpdate(data: DriverLocationUpdate) {
         const driverIndex = drivers.findIndex(d => d.id === data.driverId);
@@ -192,7 +226,7 @@ function initMapInstances() {
         try {
             const L = (window as any).L;
             const map = L.map(containerId).setView(
-                [driver.currentLat ?? STORE_LAT, driver.currentLng ?? STORE_LNG],
+                [driver.currentLat ?? getStoreLat(), driver.currentLng ?? getStoreLng()],
                 15
             );
 
@@ -201,11 +235,11 @@ function initMapInstances() {
                 maxZoom: 19,
             }).addTo(map);
 
-            L.marker([STORE_LAT, STORE_LNG], {
+            L.marker([getStoreLat(), getStoreLng()], {
                 icon: createStoreIcon(),
             })
                 .addTo(map)
-                .bindPopup(`<b>TOKO</b><br>${STORE_NAME}`);
+                .bindPopup(`<b>TOKO</b><br>${getStoreName()}`);
 
             if (driver.currentLat && driver.currentLng) {
                 const driverMarker = L.marker(
@@ -247,7 +281,7 @@ function initMapInstances() {
 
             if (driver.currentLat && driver.currentLng) {
                 const points = [
-                    [STORE_LAT, STORE_LNG],
+                    [getStoreLat(), getStoreLng()],
                     [driver.currentLat, driver.currentLng],
                 ];
                 if (routes?.routeToDestination) {
@@ -548,7 +582,7 @@ function initMapInstances() {
                                             <div class="info-item">
                                                 <span class="info-label">Lokasi Toko</span>
                                                 <span class="info-value">
-                                                    {STORE_NAME}
+                                                    {getStoreName()}
                                                 </span>
                                             </div>
                                             {#if driver.vehiclePlate}

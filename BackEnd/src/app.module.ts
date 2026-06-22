@@ -14,6 +14,7 @@ import { DriverLocationModule } from './driver-location/driver-location.module.j
 import { ChatModule } from './chat/chat.module.js';
 import { SupabaseModule } from './supabase/supabase.module.js';
 import { UnitsModule } from './units/units.module.js';
+import { StoreConfigModule } from './store-config/store-config.module.js';
 import { Product } from './products/product.entity.js';
 import { ProductVariant } from './products/product-variant.entity.js';
 import { Order } from './orders/order.entity.js';
@@ -24,6 +25,7 @@ import { Customer } from './customers/customer.entity.js';
 import { Conversation } from './chat/entities/conversation.entity.js';
 import { Message } from './chat/entities/message.entity.js';
 import { Unit } from './units/units.entity.js';
+import { StoreConfig } from './store-config/store-config.entity.js';
 
 const dbHost = process.env.DB_HOST;
 const dbPort = parseInt(process.env.DB_PORT || '5432', 10);
@@ -62,6 +64,7 @@ if (!dbPassword) {
         Conversation,
         Message,
         Unit,
+        StoreConfig,
       ],
       synchronize: false,
       logging: process.env.NODE_ENV !== 'production',
@@ -76,6 +79,7 @@ if (!dbPassword) {
     ChatModule,
     SupabaseModule,
     UnitsModule,
+    StoreConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService, SeedService],
