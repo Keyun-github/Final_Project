@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
+import '../services/api_service.dart';
 import 'delivery_map_page.dart';
 import 'delivery_confirmation_page.dart';
 import 'photo_confirmation_page.dart';
@@ -315,7 +316,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                               )
                             : _order.deliveryPhoto!.contains('uploads')
                             ? Image.network(
-                                'http://localhost:3000/${_order.deliveryPhoto}',
+                                _order.deliveryPhoto!.startsWith('http')
+                                    ? _order.deliveryPhoto!
+                                    : '${ApiService.baseUrl}/${_order.deliveryPhoto}',
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) => const Center(
                                   child: Icon(

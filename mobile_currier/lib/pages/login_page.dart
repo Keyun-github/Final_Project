@@ -21,7 +21,14 @@ class _LoginPageState extends State<LoginPage>
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
-  static const String _baseUrl = 'http://localhost:3000';
+  // Backend base URL is baked into the binary at build time via
+  //   --dart-define=API_URL=https://api-kelun.ngelantour.cloud
+  // For local dev, pass --dart-define=API_URL=http://10.0.2.2:3000
+  static const String _envBaseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://api-kelun.ngelantour.cloud',
+  );
+  static String get _baseUrl => _envBaseUrl;
 
   @override
   void initState() {

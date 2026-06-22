@@ -3,7 +3,15 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:3000';
+  // Backend base URL is baked into the binary at build time via
+  //   --dart-define=API_URL=https://api-kelun.ngelantour.cloud
+  // For local development, pass --dart-define=API_URL=http://10.0.2.2:3000
+  // (Android emulator) or http://localhost:3000 (iOS simulator).
+  static const String _envBaseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://api-kelun.ngelantour.cloud',
+  );
+  static String get baseUrl => _envBaseUrl;
 
   // ===== Orders =====
   static Future<List<Map<String, dynamic>>> fetchOrders() async {
@@ -330,6 +338,31 @@ class ApiService {
     } catch (e) {
       debugPrint('[ApiService] GET error: $e');
       return [];
+    }
+  }
+
+  // ===== Store Config =====
+  /// Fetches the singleton store config (address + lat + lng) from the
+  /// backend. Falls back to the legacy hardcoded values when the API is
+  /// unreachable so the UI never breaks.
+  static Future<Map<String, dynamic>> fetchStoreConfig() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/store-config'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to load store config: ${response.statusCode}',
+      );
+    } catch (e) {
+      debugPrint('[ApiService] fetchStoreConfig error: $e');
+      return {
+        'address': 'Jl. Kedung Rukem IV / 55',
+        'lat': -7.2628478,
+        'lng': 112.7336368,
+      };
     }
   }
 }

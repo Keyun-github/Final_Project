@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import '../models/order_model.dart';
 import '../services/nominatim_service.dart';
 import '../services/api_service.dart';
+import '../services/store_config_cache.dart';
 import '../services/websocket_service.dart';
 import '../utils/snap_to_road.dart';
 import 'chat/chat_room_page.dart';
@@ -41,6 +42,7 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
   List<LatLng> _decodedStoreRoute = [];
   List<LatLng> _decodedDestRoute = [];
   StreamSubscription? _routeUpdateSubscription;
+  String _storeAddress = NominatimService.STORE_ADDRESS;
 
   static const LatLng STORE_LOCATION = LatLng(
     NominatimService.STORE_LAT,
@@ -89,10 +91,14 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
       '[DeliveryMapPage] order status: ${widget.order.status}, deliveryAddress: ${widget.order.deliveryAddress}',
     );
 
-    // Set pickup location (store)
-    _pickupLat = NominatimService.STORE_LAT;
-    _pickupLng = NominatimService.STORE_LNG;
+    // Set pickup location (store) — fetched from backend, with legacy
+    // hard-coded values as the fallback if the API is unreachable.
+    final store = await StoreConfigCache.instance.get();
+    _pickupLat = (store['lat'] as num?)?.toDouble() ?? NominatimService.STORE_LAT;
+    _pickupLng = (store['lng'] as num?)?.toDouble() ?? NominatimService.STORE_LNG;
+    _storeAddress = (store['address'] as String?) ?? NominatimService.STORE_ADDRESS;
     debugPrint('[DeliveryMapPage] Store location: $_pickupLat, $_pickupLng');
+    debugPrint('[DeliveryMapPage] Store address: $_storeAddress');
 
     // Use delivery coordinates from order (backend geocodes them)
     // Sentinel value 0.0 means "not geocoded"
@@ -805,7 +811,7 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          NominatimService.STORE_ADDRESS,
+                          _storeAddress,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -891,7 +897,7 @@ class _DeliveryMapPageState extends State<DeliveryMapPage> {
                               const SizedBox(height: 4),
                               Text(
                                 isPickingUp
-                                    ? NominatimService.STORE_ADDRESS
+                                    ? _storeAddress
                                     : widget.order.deliveryAddress,
                                 style: const TextStyle(
                                   fontSize: 14,
