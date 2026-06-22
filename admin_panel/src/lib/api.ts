@@ -252,3 +252,57 @@ export async function updateStoreConfig(
         body: JSON.stringify({ address, lat, lng }),
     });
 }
+
+/**
+ * Address-only update — backend geocodes the address via Nominatim
+ * automatically. The admin doesn't have to know the lat/lng.
+ */
+export async function resolveStoreConfig(
+    address: string,
+): Promise<StoreConfig> {
+    return request('/store-config', {
+        method: 'PUT',
+        body: JSON.stringify({ address }),
+    });
+}
+
+/**
+ * Map-picker update — admin picked a spot on the map and confirmed.
+ * Uses a separate endpoint that accepts explicit coords.
+ */
+export async function updateStoreConfigFromCoords(
+    address: string,
+    lat: number,
+    lng: number,
+): Promise<StoreConfig> {
+    return request('/store-config/coords', {
+        method: 'POST',
+        body: JSON.stringify({ address, lat, lng }),
+    });
+}
+
+export interface GeocodeResult {
+    found: boolean;
+    lat?: number;
+    lng?: number;
+    displayName?: string;
+}
+
+/** Preview-only geocoding — does NOT persist anything. */
+export async function geocodeAddress(address: string): Promise<GeocodeResult> {
+    return request('/store-config/geocode', {
+        method: 'POST',
+        body: JSON.stringify({ address }),
+    });
+}
+
+/** Reverse-geocode lat/lng → display name (for map-picker flow). */
+export async function reverseGeocodeAddress(
+    lat: number,
+    lng: number,
+): Promise<{ displayName: string | null }> {
+    return request('/store-config/reverse-geocode', {
+        method: 'POST',
+        body: JSON.stringify({ lat, lng }),
+    });
+}

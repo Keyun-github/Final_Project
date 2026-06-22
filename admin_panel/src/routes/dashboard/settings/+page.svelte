@@ -1,17 +1,29 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import {
         fetchStoreConfig,
-        updateStoreConfig,
+        resolveStoreConfig,
+        updateStoreConfigFromCoords,
+        geocodeAddress,
+        reverseGeocodeAddress,
         type StoreConfig,
     } from '$lib/api';
 
     let config = $state<StoreConfig | null>(null);
     let address = $state('');
-    let lat = $state('');
-    let lng = $state('');
     let isLoading = $state(true);
     let isSaving = $state(false);
+    let isGeocoding = $state(false);
+
+    let mapContainer: HTMLDivElement | null = $state(null);
+    let mapInstance: any = null;
+    let markerInstance: any = null;
+
+    let pickedLat = $state<number | null>(null);
+    let pickedLng = $state<number | null>(null);
+    let pickedDisplayName = $state('');
+    let hasPickedOnMap = $state(false);
+
     let toastMessage = $state('');
     let toastType = $state<'success' | 'error'>('success');
     let toastVisible = $state(false);
@@ -29,11 +41,12 @@
 
     onMount(async () => {
         await loadConfig();
+        loadLeaflet();
     });
 
-    import { onDestroy } from 'svelte';
     onDestroy(() => {
         if (toastTimer) clearTimeout(toastTimer);
+        if (mapInstance) mapInstance.remove();
     });
 
     async function loadConfig() {
@@ -42,8 +55,8 @@
             const data = await fetchStoreConfig();
             config = data;
             address = data.address;
-            lat = String(data.lat);
-            lng = String(data.lng);
+            pickedLat = data.lat;
+            pickedLng = data.lng;
         } catch (e) {
             console.error('Failed to load store config:', e);
             showToast('❌ Gagal memuat konfigurasi toko', 'error');
@@ -52,48 +65,155 @@
         }
     }
 
-    function handleLatLngChange() {
-        const newLat = parseFloat(lat);
-        const newLng = parseFloat(lng);
-        // Validate range, show toast if invalid
-        if (!isNaN(newLat) && (newLat < -90 || newLat > 90)) {
-            showToast('❌ Latitude harus antara -90 dan 90', 'error');
+    async function loadLeaflet() {
+        if (typeof window === 'undefined') return;
+        // Inject Leaflet CSS once.
+        if (!document.getElementById('leaflet-css-settings')) {
+            const link = document.createElement('link');
+            link.id = 'leaflet-css-settings';
+            link.rel = 'stylesheet';
+            link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(link);
         }
-        if (!isNaN(newLng) && (newLng < -180 || newLng > 180)) {
-            showToast('❌ Longitude harus antara -180 dan 180', 'error');
+        // Inject Leaflet JS once; initMap after it loads.
+        if ((window as any).L) {
+            initMap();
+            return;
+        }
+        if (!document.getElementById('leaflet-script-settings')) {
+            const script = document.createElement('script');
+            script.id = 'leaflet-script-settings';
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.onload = () => initMap();
+            document.head.appendChild(script);
         }
     }
 
-    async function saveConfig() {
-        const cleanAddress = address.trim();
-        const latNum = parseFloat(lat);
-        const lngNum = parseFloat(lng);
+    function initMap() {
+        if (!mapContainer || mapInstance) return;
+        const L = (window as any).L;
+        if (!L) return;
 
+        const initialCenter: [number, number] = [
+            pickedLat ?? -7.2628478,
+            pickedLng ?? 112.7336368,
+        ];
+        mapInstance = L.map(mapContainer).setView(initialCenter, 16);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19,
+        }).addTo(mapInstance);
+
+        const marker = L.marker(initialCenter, { draggable: true }).addTo(
+            mapInstance,
+        );
+        marker.on('dragend', async () => {
+            const pos = marker.getLatLng();
+            pickedLat = pos.lat;
+            pickedLng = pos.lng;
+            hasPickedOnMap = true;
+            await fetchDisplayName(pos.lat, pos.lng);
+        });
+        markerInstance = marker;
+
+        mapInstance.on('click', async (e: any) => {
+            const { lat, lng } = e.latlng;
+            pickedLat = lat;
+            pickedLng = lng;
+            hasPickedOnMap = true;
+            marker.setLatLng([lat, lng]);
+            await fetchDisplayName(lat, lng);
+        });
+    }
+
+    async function fetchDisplayName(lat: number, lng: number) {
+        try {
+            const result = await reverseGeocodeAddress(lat, lng);
+            if (result.displayName) {
+                pickedDisplayName = result.displayName;
+                // Only auto-fill if the address field is empty OR the admin
+                // picked a fresh point on the map.
+                if (!address.trim() || hasPickedOnMap) {
+                    address = result.displayName;
+                }
+            }
+        } catch (e) {
+            console.error('Reverse geocode failed:', e);
+        }
+    }
+
+    function updateMarkerOnMap(lat: number, lng: number) {
+        if (!mapInstance || !markerInstance) return;
+        markerInstance.setLatLng([lat, lng]);
+        mapInstance.setView([lat, lng], 16);
+    }
+
+    /**
+     * Address-only save: backend geocodes via Nominatim.
+     */
+    async function saveByAddress() {
+        const cleanAddress = address.trim();
         if (!cleanAddress) {
             showToast('❌ Alamat tidak boleh kosong', 'error');
-            return;
-        }
-        if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-            showToast('❌ Latitude harus angka antara -90 dan 90', 'error');
-            return;
-        }
-        if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-            showToast('❌ Longitude harus angka antara -180 dan 180', 'error');
             return;
         }
 
         try {
             isSaving = true;
-            const updated = await updateStoreConfig(cleanAddress, latNum, lngNum);
+            isGeocoding = true;
+            const updated = await resolveStoreConfig(cleanAddress);
             config = updated;
             address = updated.address;
-            lat = String(updated.lat);
-            lng = String(updated.lng);
+            pickedLat = updated.lat;
+            pickedLng = updated.lng;
+            hasPickedOnMap = false;
+            updateMarkerOnMap(updated.lat, updated.lng);
             showToast('✅ Lokasi toko berhasil disimpan', 'success');
         } catch (e: any) {
-            console.error('Failed to save store config:', e);
+            console.error('Failed to save by address:', e);
             showToast(
-                `❌ Gagal menyimpan: ${e?.message ?? 'unknown error'}`,
+                `❌ Gagal: ${e?.message ?? 'tidak bisa menemukan koordinat untuk alamat ini'}`,
+                'error',
+            );
+        } finally {
+            isSaving = false;
+            isGeocoding = false;
+        }
+    }
+
+    /**
+     * Map-pick save: admin clicked on the map, address field is filled
+     * with whatever the admin wants displayed.
+     */
+    async function saveByMap() {
+        if (pickedLat == null || pickedLng == null) {
+            showToast(
+                '❌ Klik peta dulu untuk pilih lokasi, atau ketik alamat lalu klik "Simpan Otomatis"',
+                'error',
+            );
+            return;
+        }
+        if (!address.trim()) {
+            showToast(
+                '❌ Alamat tidak boleh kosong. Klik peta untuk auto-isi dari koordinat.',
+                'error',
+            );
+            return;
+        }
+
+        try {
+            isSaving = true;
+            const updated = await updateStoreConfigFromCoords(
+                address.trim(),
+                pickedLat,
+                pickedLng,
+            );
+            config = updated;
+            showToast('✅ Lokasi toko berhasil disimpan', 'success');
+        } catch (e: any) {
+            console.error('Failed to save by map:', e);
+            showToast(
+                `❌ Gagal: ${e?.message ?? 'unknown error'}`,
                 'error',
             );
         } finally {
@@ -101,22 +221,41 @@
         }
     }
 
-    function getCurrentLocation() {
-        // Try browser geolocation
-        if (!('geolocation' in navigator)) {
-            showToast('❌ Browser tidak mendukung geolocation', 'error');
+    /**
+     * Preview-only geocode: show what the backend would pick for the
+     * typed address without committing. Updates the marker on the map.
+     */
+    async function previewGeocode() {
+        const cleanAddress = address.trim();
+        if (!cleanAddress) {
+            showToast('❌ Ketik alamat dulu', 'error');
             return;
         }
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                lat = pos.coords.latitude.toFixed(7);
-                lng = pos.coords.longitude.toFixed(7);
-                showToast('✅ Lokasi GPS terbaca', 'success');
-            },
-            (err) => {
-                showToast(`❌ Gagal baca GPS: ${err.message}`, 'error');
-            },
-        );
+        try {
+            isGeocoding = true;
+            const result = await geocodeAddress(cleanAddress);
+            if (!result.found || result.lat == null || result.lng == null) {
+                showToast(
+                    '❌ Tidak bisa menemukan koordinat untuk alamat ini. Coba lebih spesifik.',
+                    'error',
+                );
+                return;
+            }
+            pickedLat = result.lat;
+            pickedLng = result.lng;
+            hasPickedOnMap = false;
+            updateMarkerOnMap(result.lat, result.lng);
+            pickedDisplayName = result.displayName ?? '';
+            showToast(
+                `✅ Ditemukan: (${result.lat.toFixed(5)}, ${result.lng.toFixed(5)})`,
+                'success',
+            );
+        } catch (e: any) {
+            console.error('Preview geocode failed:', e);
+            showToast(`❌ Gagal: ${e?.message ?? 'unknown error'}`, 'error');
+        } finally {
+            isGeocoding = false;
+        }
     }
 </script>
 
@@ -128,8 +267,9 @@
     <div>
         <h1>Pengaturan Toko</h1>
         <p class="page-subtitle">
-            Atur alamat & koordinat toko. Data ini dipakai oleh driver dan
-            customer untuk menampilkan rute pickup.
+            Ketik alamat toko lalu klik "Simpan Otomatis" — sistem akan
+            mencari koordinat sendiri. Atau klik peta untuk pilih lokasi
+            secara manual.
         </p>
     </div>
     <button class="btn-refresh" onclick={loadConfig} title="Refresh">
@@ -154,89 +294,109 @@
     </div>
 {:else}
     <div class="settings-grid">
-        <!-- Form Card -->
+        <!-- Address Form -->
         <div class="card">
             <div class="card-header">
-                <h2>Lokasi Toko</h2>
+                <h2>Alamat Toko</h2>
                 <p class="card-subtitle">
-                    Koordinat ini jadi titik pickup default untuk semua
-                    order.
+                    Sistem akan otomatis menemukan koordinat dari
+                    alamat yang diketik.
                 </p>
             </div>
             <div class="card-body">
                 <div class="form-group">
-                    <label for="store-address">Alamat Toko</label>
-                    <input
+                    <label for="store-address">Alamat</label>
+                    <textarea
                         id="store-address"
-                        type="text"
                         bind:value={address}
-                        placeholder="Jl. Contoh No. 123, Kota"
-                    />
+                        placeholder="Jl. Contoh No. 123, Kelurahan, Kecamatan, Kota"
+                        rows="3"
+                    ></textarea>
                     <p class="form-hint">
-                        Tulis alamat lengkap seperti yang akan ditampilkan ke
-                        customer.
+                        Tips: tulis alamat lengkap dengan kelurahan dan kota
+                        supaya Nominatim bisa menemukan koordinat yang tepat.
                     </p>
                 </div>
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label for="store-lat">Latitude</label>
-                        <input
-                            id="store-lat"
-                            type="text"
-                            inputmode="decimal"
-                            bind:value={lat}
-                            oninput={handleLatLngChange}
-                            placeholder="-7.2628478"
-                        />
-                    </div>
-                    <div class="form-group flex-1">
-                        <label for="store-lng">Longitude</label>
-                        <input
-                            id="store-lng"
-                            type="text"
-                            inputmode="decimal"
-                            bind:value={lng}
-                            oninput={handleLatLngChange}
-                            placeholder="112.7336368"
-                        />
-                    </div>
-                </div>
-                <div class="form-actions">
+
+                <div class="action-row">
                     <button
                         type="button"
                         class="btn-secondary"
-                        onclick={getCurrentLocation}
-                        disabled={isSaving}
+                        onclick={previewGeocode}
+                        disabled={isGeocoding || isSaving}
                     >
-                        📍 Pakai GPS Saya
+                        🔍 Cari di Peta (Preview)
                     </button>
                     <button
                         type="button"
                         class="btn-save"
-                        onclick={saveConfig}
-                        disabled={isSaving}
+                        onclick={saveByAddress}
+                        disabled={isSaving || isGeocoding}
                     >
-                        {isSaving ? 'Menyimpan...' : 'Simpan'}
+                        {isGeocoding
+                            ? 'Mencari koordinat...'
+                            : isSaving
+                              ? 'Menyimpan...'
+                              : 'Simpan Otomatis'}
                     </button>
                 </div>
+
+                <div class="divider">
+                    <span>ATAU</span>
+                </div>
+
+                <button
+                    type="button"
+                    class="btn-save-map"
+                    onclick={saveByMap}
+                    disabled={isSaving || pickedLat == null}
+                >
+                    {isSaving
+                        ? 'Menyimpan...'
+                        : '📍 Simpan dari Klik Peta'}
+                </button>
+                <p class="form-hint center">
+                    Klik di peta di samping untuk pilih titik. Alamat di
+                    atas akan dipakai sebagai display name.
+                </p>
+
+                {#if pickedLat != null && pickedLng != null}
+                    <div class="coord-display">
+                        <span>📍 Titik dipilih:</span>
+                        <code
+                            >{pickedLat.toFixed(5)}, {pickedLng.toFixed(5)}</code
+                        >
+                        {#if pickedDisplayName}
+                            <p class="form-hint">
+                                Auto-isi: {pickedDisplayName}
+                            </p>
+                        {/if}
+                    </div>
+                {/if}
             </div>
         </div>
 
-        <!-- Preview Card -->
+        <!-- Map -->
         <div class="card">
             <div class="card-header">
-                <h2>Preview</h2>
+                <h2>Peta</h2>
                 <p class="card-subtitle">
-                    Tampilan saat ini di backend (mobile apps akan refresh
-                    otomatis saat mereka query berikutnya).
+                    Klik di mana saja untuk pilih lokasi, atau drag marker
+                    untuk adjust.
                 </p>
             </div>
-            <div class="card-body">
-                {#if config}
-                    <div class="preview-row">
-                        <span class="preview-label">ID</span>
-                        <span class="preview-value">{config.id}</span>
-                    </div>
+            <div class="card-body no-pad">
+                <div bind:this={mapContainer} class="map-container"></div>
+            </div>
+        </div>
+
+        <!-- Current Saved State -->
+        {#if config}
+            <div class="card saved-card">
+                <div class="card-header">
+                    <h2>Tersimpan di Server</h2>
+                </div>
+                <div class="card-body">
                     <div class="preview-row">
                         <span class="preview-label">Alamat</span>
                         <span class="preview-value">{config.address}</span>
@@ -263,9 +423,9 @@
                             >
                         </div>
                     {/if}
-                {/if}
+                </div>
             </div>
-        </div>
+        {/if}
     </div>
 {/if}
 
@@ -336,9 +496,12 @@
 
     .settings-grid {
         display: grid;
-        grid-template-columns: 1.2fr 1fr;
+        grid-template-columns: 1fr 1fr;
         gap: 20px;
         align-items: start;
+    }
+    .saved-card {
+        grid-column: 1 / -1;
     }
     @media (max-width: 900px) {
         .settings-grid {
@@ -369,16 +532,12 @@
     .card-body {
         padding: 20px 24px 24px;
     }
+    .card-body.no-pad {
+        padding: 0;
+    }
 
     .form-group {
         margin-bottom: 16px;
-    }
-    .form-row {
-        display: flex;
-        gap: 12px;
-    }
-    .flex-1 {
-        flex: 1;
     }
     label {
         display: block;
@@ -387,6 +546,7 @@
         margin-bottom: 6px;
         color: var(--color-text);
     }
+    textarea,
     input[type='text'] {
         width: 100%;
         padding: 10px 14px;
@@ -396,10 +556,13 @@
         background: var(--color-bg-card, white);
         color: var(--color-text);
         box-sizing: border-box;
+        font-family: inherit;
         transition:
             border-color 0.15s,
             box-shadow 0.15s;
+        resize: vertical;
     }
+    textarea:focus,
     input[type='text']:focus {
         outline: none;
         border-color: var(--color-primary, #6c63ff);
@@ -410,14 +573,18 @@
         color: var(--color-text-secondary, #6b7280);
         margin: 6px 0 0;
     }
-    .form-actions {
+    .form-hint.center {
+        text-align: center;
+    }
+
+    .action-row {
         display: flex;
         gap: 8px;
         justify-content: flex-end;
-        margin-top: 8px;
     }
     .btn-secondary,
-    .btn-save {
+    .btn-save,
+    .btn-save-map {
         padding: 10px 18px;
         border-radius: var(--radius-md, 8px);
         font-size: 14px;
@@ -441,10 +608,63 @@
     .btn-save:hover:not(:disabled) {
         background: var(--color-primary-hover, #5a52d5);
     }
+    .btn-save-map {
+        background: #43a047;
+        color: white;
+        border: none;
+        width: 100%;
+    }
+    .btn-save-map:hover:not(:disabled) {
+        background: #388e3c;
+    }
     .btn-secondary:disabled,
-    .btn-save:disabled {
+    .btn-save:disabled,
+    .btn-save-map:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+    }
+
+    .divider {
+        display: flex;
+        align-items: center;
+        text-align: center;
+        margin: 20px 0;
+        color: var(--color-text-secondary, #6b7280);
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .divider::before,
+    .divider::after {
+        content: '';
+        flex: 1;
+        border-top: 1px solid var(--color-border, #e5e7eb);
+    }
+    .divider span {
+        padding: 0 12px;
+    }
+
+    .coord-display {
+        margin-top: 16px;
+        padding: 12px;
+        background: rgba(108, 99, 255, 0.06);
+        border-radius: var(--radius-md, 8px);
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .coord-display code {
+        background: var(--color-bg-card, white);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: 'SF Mono', Menlo, Monaco, monospace;
+        font-size: 12px;
+        align-self: flex-start;
+    }
+
+    .map-container {
+        width: 100%;
+        height: 420px;
     }
 
     .preview-row {
