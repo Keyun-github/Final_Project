@@ -28,6 +28,6 @@ export class StoreConfig {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 
-  @Column({ name: 'updated_by', length: 100, nullable: true })
+  @Column({ name: 'updated_by', type: 'varchar', length: 100, nullable: true })
   updatedBy!: string | null;
 }
