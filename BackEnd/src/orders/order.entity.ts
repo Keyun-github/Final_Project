@@ -24,28 +24,33 @@ export enum OrderStatus {
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ name: 'customerId', nullable: true })
-  customerId: number | null;
+  customerId!: number | null;
+
 
   @ManyToOne(() => Customer, { nullable: true })
-  customer: Customer;
+  customer!: Customer;
+
 
   @Column({ name: 'customerName' })
-  customerName: string;
+  customerName!: string;
+
 
   @Column({ name: 'customerPhone', default: '' })
-  customerPhone: string;
+  customerPhone!: string;
+
 
   @Column({
     name: 'pickupAddress',
     default: 'Gudang Utama, Jl. Industri No. 15, Jakarta Utara',
   })
-  pickupAddress: string;
-
+  pickupAddress!: string;
   @Column({ name: 'deliveryAddress', default: '' })
-  deliveryAddress: string;
+  deliveryAddress!: string;
+
 
   @Column({
     name: 'totalAmount',
@@ -54,41 +59,49 @@ export class Order {
     scale: 2,
     default: 0,
   })
-  totalAmount: number;
-
+  totalAmount!: number;
   @Column({ type: 'varchar', default: OrderStatus.PENDING })
-  status: OrderStatus;
+  status!: OrderStatus;
+
 
   @Column({ name: 'paymentMethod', default: 'COD' })
-  paymentMethod: string;
+  paymentMethod!: string;
+
 
   @Column({ name: 'transactionId', nullable: true, type: 'varchar' })
-  transactionId: string | null;
+  transactionId!: string | null;
+
 
   @Column({ name: 'driverId', nullable: true })
-  driverId: number | null;
+  driverId!: number | null;
+
 
   @Column({ name: 'deliveryPhoto', nullable: true, type: 'varchar' })
-  deliveryPhoto: string | null;
+  deliveryPhoto!: string | null;
+
 
   @Column({ name: 'deliveryLat', nullable: true, type: 'float', default: 0 })
-  deliveryLat: number | null;
+  deliveryLat!: number | null;
+
 
   @Column({ name: 'deliveryLng', nullable: true, type: 'float', default: 0 })
-  deliveryLng: number | null;
+  deliveryLng!: number | null;
+
 
   @ManyToOne(() => Driver, { nullable: true })
-  driver: Driver;
+  driver!: Driver;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
+
 
   @OneToMany(() => OrderItem, (item) => item.order, {
     cascade: true,
     eager: true,
   })
-  items: OrderItem[];
-}
+  items!: OrderItem[];}

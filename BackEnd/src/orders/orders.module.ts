@@ -7,6 +7,7 @@ import { ProductVariant } from '../products/product-variant.entity.js';
 import { Driver } from '../drivers/driver.entity.js';
 import { DriversModule } from '../drivers/drivers.module.js';
 import { PaymentModule } from '../payment/payment.module.js';
+import { StoreConfigModule } from '../store-config/store-config.module.js';
 import { OrdersService } from './orders.service.js';
 import { OrdersController } from './orders.controller.js';
 
@@ -21,6 +22,7 @@ import { OrdersController } from './orders.controller.js';
     ]),
     DriversModule,
     forwardRef(() => PaymentModule),
+    StoreConfigModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

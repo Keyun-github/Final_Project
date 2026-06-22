@@ -227,3 +227,28 @@ export async function createUnit(name: string): Promise<UnitItem> {
 export async function deleteUnit(id: number): Promise<{ message: string; unit: UnitItem }> {
     return request(`/units/${id}`, { method: 'DELETE' });
 }
+
+// ----- Store Config -----
+export interface StoreConfig {
+    id: number;
+    address: string;
+    lat: number;
+    lng: number;
+    updatedAt: string;
+    updatedBy: string | null;
+}
+
+export async function fetchStoreConfig(): Promise<StoreConfig> {
+    return request('/store-config');
+}
+
+export async function updateStoreConfig(
+    address: string,
+    lat: number,
+    lng: number,
+): Promise<StoreConfig> {
+    return request('/store-config', {
+        method: 'PUT',
+        body: JSON.stringify({ address, lat, lng }),
+    });
+}

@@ -12,38 +12,50 @@ import { Product } from '../products/product.entity.js';
 @Entity('order_items')
 export class OrderItem {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ name: 'orderId' })
-  orderId: number;
+  orderId!: number;
+
 
   @Column({ name: 'productId', nullable: true })
-  productId: number | null;
+  productId!: number | null;
+
 
   @Column({ name: 'productName' })
-  productName: string;
+  productName!: string;
+
 
   @Column({ default: 1 })
-  quantity: number;
+  quantity!: number;
+
 
   @Column({ name: 'unitPrice', type: 'decimal', precision: 12, scale: 2 })
-  unitPrice: number;
+  unitPrice!: number;
+
 
   @Column({ name: 'unitName', default: '' })
-  unitName: string;
+  unitName!: string;
+
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  subtotal: number;
+  subtotal!: number;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
+
 
   @ManyToOne(() => Order, (order) => order.items, { onDelete: 'CASCADE' })
-  order: Order;
+  order!: Order;
+
 
   @ManyToOne(() => Product, { nullable: true })
-  product: Product;
+  product!: Product;
+
 }

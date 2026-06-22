@@ -9,6 +9,7 @@ import { ProductVariant } from '../products/product-variant.entity.js';
 import { DriversService } from '../drivers/drivers.service.js';
 import { DriverLocationGateway } from '../driver-location/driver-location.gateway.js';
 import { PaymentService } from '../payment/payment.service.js';
+import { StoreConfigService } from '../store-config/store-config.service.js';
 import { getRouteWithORSAndFallback, RouteResult } from '../utils/openroute.util.js';
 import { geocodeAddress } from '../utils/nominatim.util.js';
 import { snapToRoadOSRM } from '../utils/osrm.util.js';
@@ -29,6 +30,7 @@ export class OrdersService {
     private readonly locationGateway: DriverLocationGateway,
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    private readonly storeConfigService: StoreConfigService,
   ) {}
 
   async findAll(): Promise<Order[]> {
@@ -123,9 +125,9 @@ export class OrdersService {
 
     // For non-Midtrans payments (COD), decrease stock and auto-dispatch immediately
     if (!isMidtrans) {
-      // Store coordinates (default: Jakarta warehouse)
-      const storeLat = -6.1389;
-      const storeLng = 106.6297;
+      const storeConfig = await this.storeConfigService.getConfig();
+      const storeLat = storeConfig.lat;
+      const storeLng = storeConfig.lng;
 
       // 3. Decrease stock for each product (per-variant when available)
       for (const item of dto.items) {
@@ -242,7 +244,9 @@ export class OrdersService {
     // stops the user from being able to "confirm" the payment by simply tapping
     // a button in the app when they actually cancelled / never paid in the
     // Midtrans sandbox (or production) page.
-    const txId = (order as any).transactionId as string | undefined;
+    // `order.transactionId` is typed correctly now that the column exists in
+    // the database (see scripts/add-order-transaction-id.sql).
+    const txId = order.transactionId;
     if (!txId) {
       throw new BadRequestException(
         'Order ini tidak memiliki transactionId Midtrans',
@@ -278,9 +282,9 @@ export class OrdersService {
     order.status = OrderStatus.PENDING;
     await this.orderRepo.save(order);
 
-    // Get store coordinates (Surabaya)
-    const storeLat = -7.2628478;
-    const storeLng = 112.7336368;
+    const storeConfig = await this.storeConfigService.getConfig();
+    const storeLat = storeConfig.lat;
+    const storeLng = storeConfig.lng;
 
     // Deduct stock for each item (per-variant when available)
     for (const item of order.items) {
@@ -507,8 +511,9 @@ export class OrdersService {
     }
 
     const source: [number, number] = [driverLng, driverLat];
-    const storeLat = -7.2628478;
-    const storeLng = 112.7336368;
+    const storeConfig = await this.storeConfigService.getConfig();
+    const storeLat = storeConfig.lat;
+    const storeLng = storeConfig.lng;
 
     let routeToStore: string | null = null;
     let routeToDestination: string | null = null;
@@ -559,8 +564,9 @@ export class OrdersService {
       return { routeToStore: null, routeToDestination: null };
     }
 
-    const storeLat = -7.2628478;
-    const storeLng = 112.7336368;
+    const storeConfig = await this.storeConfigService.getConfig();
+    const storeLat = storeConfig.lat;
+    const storeLng = storeConfig.lng;
 
     console.log('[getOrderRoutes] Calculating route:', {
       orderId,
@@ -621,8 +627,9 @@ export class OrdersService {
       return { routeToStore: null, routeToDestination: null };
     }
 
-    const storeLat = -7.2628478;
-    const storeLng = 112.7336368;
+    const storeConfig = await this.storeConfigService.getConfig();
+    const storeLat = storeConfig.lat;
+    const storeLng = storeConfig.lng;
     const source: [number, number] = [driverLng, driverLat];
 
     console.log('[calculateRouteFromPosition] Calculating route for order:', orderId, {

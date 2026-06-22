@@ -20,8 +20,7 @@ import { SenderType } from './entities/message.entity.js';
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
-
+  server!: Server;
   constructor(private readonly chatService: ChatService) {}
 
   handleConnection(client: Socket) {

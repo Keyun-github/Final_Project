@@ -2,14 +2,11 @@ import { IsString, IsOptional, IsBoolean } from 'class-validator';
 
 export class CreateDriverDto {
   @IsString()
-  username: string;
-
+  username!: string;
   @IsString()
-  password: string;
-
+  password!: string;
   @IsString()
-  name: string;
-
+  name!: string;
   @IsOptional()
   @IsString()
   phone?: string;
@@ -25,8 +22,6 @@ export class CreateDriverDto {
 
 export class LoginDriverDto {
   @IsString()
-  username: string;
-
+  username!: string;
   @IsString()
-  password: string;
-}
+  password!: string;}

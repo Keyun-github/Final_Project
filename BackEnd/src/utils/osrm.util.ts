@@ -39,11 +39,12 @@ export async function getRouteOSRM(
     }
     console.log('[OSRM] No geometry in response:', JSON.stringify(response.data));
     return null;
-  } catch (error: any) {
-    if (error.code === 'ECONNABORTED') {
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    if (err.code === 'ECONNABORTED') {
       console.error('[OSRM] Request timed out');
     } else {
-      console.error('[OSRM] Error fetching route:', error?.message ?? error);
+      console.error('[OSRM] Error fetching route:', err.message ?? String(error));
     }
     return null;
   }
@@ -112,8 +113,9 @@ export async function snapToRoadOSRM(
       }
       console.warn(`[OSRM:snap] No matchings in response (attempt ${attempt + 1})`);
       return null;
-    } catch (error: any) {
-      const msg = error.code === 'ECONNABORTED' ? 'timed out' : error?.message ?? error;
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      const msg = err.code === 'ECONNABORTED' ? 'timed out' : err.message ?? String(error);
       console.error(`[OSRM:snap] Error (attempt ${attempt + 1}): ${msg}`);
       if (attempt < OSRM_MAX_RETRIES) {
         // Wait briefly before retry

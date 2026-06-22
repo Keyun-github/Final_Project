@@ -11,26 +11,34 @@ import { Product } from './product.entity.js';
 @Entity('product_variants')
 export class ProductVariant {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
+
 
   @Column({ name: 'productId' })
-  productId: number;
+  productId!: number;
+
 
   @Column({ name: 'unitName' })
-  unitName: string;
+  unitName!: string;
+
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  price: number;
+  price!: number;
+
 
   @Column({ type: 'int', default: 0 })
-  stock: number;
+  stock!: number;
+
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
+
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
+
 
   @ManyToOne(() => Product, (p) => p.variants, { onDelete: 'CASCADE' })
-  product: Product;
+  product!: Product;
+
 }
