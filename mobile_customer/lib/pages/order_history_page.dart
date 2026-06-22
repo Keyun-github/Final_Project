@@ -180,38 +180,118 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               _buildInfoRow('Telepon', order['customerPhone'] ?? ''),
               _buildInfoRow('Alamat', order['deliveryAddress'] ?? ''),
               _buildInfoRow('Pembayaran', order['paymentMethod'] ?? ''),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => OrderTrackingPage(
-                          customerName: order['customerName'] ?? '',
-                          customerAddress: order['deliveryAddress'] ?? '',
-                          paymentMethod: order['paymentMethod'] ?? '',
-                          totalAmount: _formatPrice(order['totalAmount'] ?? 0),
-                          orderId: order['id'],
+              if ((order['status'] ?? '') != 'delivered') ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrderTrackingPage(
+                            customerName: order['customerName'] ?? '',
+                            customerAddress: order['deliveryAddress'] ?? '',
+                            paymentMethod: order['paymentMethod'] ?? '',
+                            totalAmount: _formatPrice(order['totalAmount'] ?? 0),
+                            orderId: order['id'],
+                          ),
                         ),
+                      );
+                    },
+                    icon: const Icon(Icons.map, size: 20),
+                    label: const Text('Lacak Pesanan'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6C63FF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.map, size: 20),
-                  label: const Text('Lacak Pesanan'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
+
+              // Delivery proof (only for delivered orders)
+              if ((order['status'] ?? '') == 'delivered' &&
+                  order['deliveryPhoto'] != null &&
+                  (order['deliveryPhoto'] as String).isNotEmpty) ...[
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle,
+                            color: Colors.green.shade700,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Pesanan Diterima',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Builder(
+                        builder: (_) {
+                          final photo = order['deliveryPhoto'] as String;
+                          final url = photo.startsWith('http')
+                              ? photo
+                              : '${ApiService.baseUrl}/$photo';
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              url,
+                              width: double.infinity,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey.shade100,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (_, _, _) => Container(
+                                height: 200,
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Items
               const Text(

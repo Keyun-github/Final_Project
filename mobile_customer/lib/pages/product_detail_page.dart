@@ -107,25 +107,31 @@ class ProductDetailPage extends StatelessWidget {
                       runSpacing: 8,
                       children: product.variants!.map((variant) {
                         final isSelected = selectedVariant == variant;
+                        final isOutOfStock = variant.stock <= 0;
                         return ChoiceChip(
                           label: Text(
-                            '${variant.unitName} - ${variant.formattedPrice}',
+                            '${variant.unitName} • ${variant.formattedPrice}'
+                            ' • Stok: ${variant.stock}',
                           ),
                           selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setModalState(() {
-                                selectedVariant = variant;
-                              });
-                            }
-                          },
+                          onSelected: isOutOfStock
+                              ? null
+                              : (selected) {
+                                  if (selected) {
+                                    setModalState(() {
+                                      selectedVariant = variant;
+                                    });
+                                  }
+                                },
                           selectedColor: const Color(
                             0xFF6C63FF,
                           ).withValues(alpha: 0.15),
                           labelStyle: TextStyle(
-                            color: isSelected
-                                ? const Color(0xFF6C63FF)
-                                : Colors.black87,
+                            color: isOutOfStock
+                                ? Colors.grey
+                                : (isSelected
+                                    ? const Color(0xFF6C63FF)
+                                    : Colors.black87),
                             fontWeight: isSelected
                                 ? FontWeight.w700
                                 : FontWeight.normal,
@@ -257,7 +263,9 @@ class ProductDetailPage extends StatelessWidget {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: product.stock <= 0
+                      onPressed: (selectedVariant != null &&
+                                  selectedVariant!.stock <= 0) ||
+                              product.stock <= 0
                           ? null
                           : () {
                               if (customer == null) {
@@ -273,10 +281,17 @@ class ProductDetailPage extends StatelessWidget {
                                 return;
                               }
 
+                              // Use the selected variant's stock when a
+                              // variant is chosen; fall back to the product's
+                              // total stock otherwise.
+                              final availableStock = selectedVariant != null
+                                  ? selectedVariant!.stock
+                                  : product.stock;
+
                               // Limit quantity to available stock
                               int actualQuantity = quantity;
-                              if (quantity > product.stock) {
-                                actualQuantity = product.stock;
+                              if (quantity > availableStock) {
+                                actualQuantity = availableStock;
                               }
 
                               for (int i = 0; i < actualQuantity; i++) {
@@ -464,74 +479,6 @@ class ProductDetailPage extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 20),
-                  Divider(color: Colors.grey[200]),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: const Color(
-                          0xFF6C63FF,
-                        ).withValues(alpha: 0.1),
-                        child: Text(
-                          _getSellerInitial(),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF6C63FF),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.seller,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.location_on,
-                                size: 14,
-                                color: Colors.grey[500],
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                product.sellerCity,
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Divider(color: Colors.grey[200]),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Deskripsi Produk',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    product.description.isEmpty
-                        ? 'Tidak ada deskripsi produk.'
-                        : product.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.7,
-                      color: Colors.grey[700],
-                    ),
                   ),
                   const SizedBox(height: 100),
                 ],

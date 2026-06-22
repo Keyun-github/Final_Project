@@ -10,12 +10,15 @@ class StockException implements Exception {
 }
 
 class ApiService {
-  // For local development:
-  // - Android emulator: use 10.0.2.2 to reach host's localhost
-  // - iOS simulator: use localhost
-  // - Physical device: Replace with your computer's local IP address (e.g., 192.168.1.x)
-  // IMPORTANT: Make sure the backend is running and accessible from your device
-  static const String baseUrl = 'http://localhost:3000';
+  // Backend base URL is baked into the binary at build time via
+  //   --dart-define=API_URL=https://api-kelun.ngelantour.cloud
+  // For local development, pass --dart-define=API_URL=http://10.0.2.2:3000
+  // (Android emulator) or http://localhost:3000 (iOS simulator).
+  static const String _envBaseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://api-kelun.ngelantour.cloud',
+  );
+  static String get baseUrl => _envBaseUrl;
 
   static bool _isUsingDemoData = false;
   static bool get isUsingDemoData => _isUsingDemoData;
@@ -363,10 +366,22 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       }
-      return null;
+
+      // Surface the server's error message (e.g. "Pembayaran belum selesai")
+      // so the UI can show it instead of silently failing.
+      String message = 'Konfirmasi pembayaran gagal (${response.statusCode})';
+      try {
+        final body = json.decode(response.body);
+        if (body is Map && body['message'] is String) {
+          message = body['message'] as String;
+        }
+      } catch (_) {
+        // Keep the default message if the body isn't valid JSON.
+      }
+      throw Exception(message);
     } catch (e) {
       print('[ApiService] confirmPayment error: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -400,6 +415,65 @@ class ApiService {
     } catch (e) {
       print('[ApiService] GET error: $e');
       return [];
+    }
+  }
+
+  // ===== Units of Measure =====
+  static Future<List<Map<String, dynamic>>> fetchUnits() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/units'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      }
+      throw Exception('Failed to load units: ${response.statusCode}');
+    } catch (e) {
+      print('[ApiService] Error fetching units: $e');
+      // Fallback to the five default units so the UI never breaks.
+      return const [
+        {'id': -1, 'name': 'KG', 'isDefault': true, 'isActive': true},
+        {'id': -2, 'name': 'Box', 'isDefault': true, 'isActive': true},
+        {
+          'id': -3,
+          'name': 'Sack - 25kg',
+          'isDefault': true,
+          'isActive': true
+        },
+        {
+          'id': -4,
+          'name': 'Sack - 50kg',
+          'isDefault': true,
+          'isActive': true
+        },
+        {'id': -5, 'name': 'Piece', 'isDefault': true, 'isActive': true},
+      ];
+    }
+  }
+
+  // ===== Store Config =====
+  /// Fetches the singleton store config (address + lat + lng) from the
+  /// backend. Falls back to the legacy hardcoded values when the API is
+  /// unreachable so the UI never breaks.
+  static Future<Map<String, dynamic>> fetchStoreConfig() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/store-config'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      throw Exception(
+        'Failed to load store config: ${response.statusCode}',
+      );
+    } catch (e) {
+      print('[ApiService] fetchStoreConfig error: $e');
+      return {
+        'address': 'Jl. Kedung Rukem IV / 55',
+        'lat': -7.2628478,
+        'lng': 112.7336368,
+      };
     }
   }
 }

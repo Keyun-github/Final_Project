@@ -20,9 +20,14 @@ class ProductsSocketService {
       return;
     }
 
-    // For local development on Mac/iOS simulator: use localhost
-    // For physical device on network: use your IP address (e.g., 192.168.x.x)
-    const wsUrl = 'http://localhost:3000/products';
+    // Resolve base URL from --dart-define=API_URL=...; default to the
+    // production Dokploy backend. socket_io_client expects an http(s) URL
+    // and will upgrade to WebSocket automatically.
+    const envBase = String.fromEnvironment(
+      'API_URL',
+      defaultValue: 'https://api-kelun.ngelantour.cloud',
+    );
+    const wsUrl = '$envBase/products';
 
     _socket = io.io(wsUrl, <String, dynamic>{
       'transports': ['websocket', 'polling'],

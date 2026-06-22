@@ -47,6 +47,11 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   String? _routeToDestination;
   List<LatLng> _decodedStoreRoute = [];
   List<LatLng> _decodedDestRoute = [];
+  Map<String, dynamic> _storeConfig = const {
+    'address': 'Jl. Kedung Rukem IV / 55',
+    'lat': -7.2628478,
+    'lng': 112.7336368,
+  };
 
   String get _currentStatusText {
     if (_orderData == null) return 'Menunggu driver menerima pesanan...';
@@ -87,8 +92,22 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
   void initState() {
     super.initState();
     _loadOrderData();
+    _loadStoreConfig();
     _startAutoRefresh();
     _initWebSocket();
+  }
+
+  Future<void> _loadStoreConfig() async {
+    try {
+      final config = await ApiService.fetchStoreConfig();
+      if (mounted) {
+        setState(() {
+          _storeConfig = config;
+        });
+      }
+    } catch (e) {
+      debugPrint('[OrderTracking] Failed to load store config: $e');
+    }
   }
 
   void _initWebSocket() {
@@ -876,6 +895,10 @@ class _OrderTrackingPageState extends State<OrderTrackingPage> {
                         _DetailRow(
                           label: 'Pelanggan',
                           value: widget.customerName,
+                        ),
+                        _DetailRow(
+                          label: 'Lokasi Toko',
+                          value: (_storeConfig['address'] as String?) ?? '-',
                         ),
                         _DetailRow(
                           label: 'Alamat',

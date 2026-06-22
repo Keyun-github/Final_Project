@@ -97,7 +97,7 @@ class SocketService {
       }
       return fromEnv;
     }
-    return 'http://localhost:3000';
+    return 'https://api-kelun.ngelantour.cloud';
   }
 
   void subscribeToOrder(int orderId) {
