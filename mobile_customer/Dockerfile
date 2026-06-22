@@ -27,7 +27,6 @@ ENV API_URL=${API_URL}
 # Smaller payload, faster initial load on demo Wi-Fi.
 # `--base-href /` — app served from the root of its domain.
 RUN flutter build web --release \
-    --web-renderer html \
     --base-href=/ \
     --dart-define=API_URL=${API_URL}
 
