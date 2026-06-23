@@ -49,4 +49,12 @@ export class CreateOrderDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
-  items!: CreateOrderItemDto[];}
+  items!: CreateOrderItemDto[];
+
+  @IsOptional()
+  @IsString()
+  deliveryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryTime?: string;}
