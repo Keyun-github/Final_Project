@@ -15,6 +15,7 @@ import { ChatModule } from './chat/chat.module.js';
 import { SupabaseModule } from './supabase/supabase.module.js';
 import { UnitsModule } from './units/units.module.js';
 import { StoreConfigModule } from './store-config/store-config.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { Product } from './products/product.entity.js';
 import { ProductVariant } from './products/product-variant.entity.js';
 import { Order } from './orders/order.entity.js';
@@ -80,6 +81,7 @@ if (!dbPassword) {
     SupabaseModule,
     UnitsModule,
     StoreConfigModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService, SeedService],
